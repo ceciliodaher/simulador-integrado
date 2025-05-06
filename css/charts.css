@@ -1,0 +1,65 @@
+.chart-container {
+    height: 300px;
+    margin-bottom: 20px;
+    position: relative;
+}
+
+/* Estilos para resultados e cards */
+.result-card {
+    background-color: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.result-section {
+    margin-bottom: 20px;
+}
+
+.result-section h4 {
+    color: var(--primary-color);
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--light-border);
+    padding-bottom: 5px;
+}
+
+.result-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.result-table td {
+    padding: 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.result-table td:first-child {
+    font-weight: 600;
+    width: 60%;
+}
+
+.result-table td:last-child {
+    text-align: right;
+}
+
+.call-to-action {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.call-to-action button {
+    padding: 10px 20px;
+}
+
+.call-to-action button.secondary {
+    background-color: white;
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+}
+
+.call-to-action button.secondary:hover {
+    background-color: #f0f7ff;
+}

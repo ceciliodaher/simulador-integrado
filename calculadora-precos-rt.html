@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Precificação - Reforma Tributária</title>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2ecc71;
+            --accent-color: #e74c3c;
+            --dark-accent: #f39c12;
+            --highlight-color: #9b59b6;
+            --light-bg: #f8f9fa;
+            --dark-text: #343a40;
+            --gray-text: #6c757d;
+            --light-border: #dee2e6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--light-bg);
+            color: var(--dark-text);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--light-border);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .logo {
+            height: 60px;
+            margin-right: 20px;
+        }
+
+        h1, h2, h3, h4 {
+            color: var(--primary-color);
+        }
+
+        .tab-container {
+            width: 100%;
+        }
+
+        .tab-buttons {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--light-border);
+        }
+
+        .tab-button {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--gray-text);
+            transition: all 0.3s;
+        }
+
+        .tab-button.active {
+            color: var(--primary-color);
+            border-bottom: 3px solid var(--primary-color);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: var(--dark-text);
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--light-border);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        input[type="number"] {
+            text-align: right;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        .group-box {
+            border: 1px solid var(--light-border);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .group-box h3 {
+            margin-top: 0;
+            color: var(--dark-text);
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        table th, table td {
+            border: 1px solid var(--light-border);
+            padding: 8px;
+            text-align: left;
+        }
+
+        table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .radio-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .radio-item input[type="radio"] {
+            width: auto;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .insumo-item {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .insumo-item button {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        .result-value {
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+
+        .positive-value {
+            color: var(--secondary-color);
+        }
+
+        .negative-value {
+            color: var(--accent-color);
+        }
+
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--gray-text);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo-container">
+                <img src="imagens/expertzy-it.png" alt="Expertzy Inteligência Tributária" class="logo">
+                <h1>Calculadora de Precificação - Reforma Tributária</h1>
+            </div>
+        </div>
+        
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-button active" data-tab="comercio">Comércio</button>
+                <button class="tab-button" data-tab="industria">Indústria</button>
+                <button class="tab-button" data-tab="configuracoes">Configurações</button>
+                <button class="tab-button" data-tab="ajuda">Ajuda</button>
+            </div>
+            
+            <!-- Aba de Comércio -->
+            <div id="comercio" class="tab-content active">
+                <div class="grid">
+                    <!-- Painel de entrada (Comércio) -->
+                    <div class="panel">
+                        <div class="group-box">
+                            <h3>Dados do Produto</h3>
+                            <div class="form-group">
+                                <label for="com-descricao">Descrição do Produto:</label>
+                                <input type="text" id="com-descricao" placeholder="Ex: Smartphone XYZ">
+                            </div>
+                            <div class="form-group">
+                                <label for="com-valor-compra">Valor de Compra (R$):</label>
+                                <input type="text" id="com-valor-compra" value="0,00" class="valor-monetario">
+                            </div>
+                            <div class="form-group">
+                                <label for="com-despesas-acessorias">Despesas Acessórias (R$):</label>
+                                <input type="text" id="com-despesas-acessorias" value="0,00" class="valor-monetario">
+                            </div>
+                            <div class="form-group">
+                                <label for="com-margem-lucro">Margem de Lucro (%):</label>
+                                <input type="number" id="com-margem-lucro" value="30" min="0" max="1000" step="0.1">
+                            </div>
+                        </div>
+
+                        <div class="group-box">
+                            <h3>Tributação na Compra</h3>
+                            <div class="form-group">
+                                <label for="com-uf-origem">Estado de Origem:</label>
+                                <select id="com-uf-origem">
+                                    <option value="SP">São Paulo</option>
+                                    <option value="RJ">Rio de Janeiro</option>
+                                    <option value="MG">Minas Gerais</option>
+                                    <!-- Demais estados serão adicionados via JavaScript -->
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="com-aliquota-icms-entrada">Alíquota ICMS Entrada (%):</label>
+                                <input type="number" id="com-aliquota-icms-entrada" value="18" min="0" max="100" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="com-aliquota-ipi-entrada">Alíquota IPI Entrada (%):</label>
+                                <input type="number" id="com-aliquota-ipi-entrada" value="0" min="0" max="100" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="com-credita-icms">Credita ICMS?</label>
+                                <div class="radio-group">
+                                    <div class="radio-item">
+                                        <input type="radio" id="com-credita-icms-sim" name="com-credita-icms" value="sim" checked>
+                                        <label for="com-credita-icms-sim">Sim</label>
+                                    </div>
+                                    <div class="radio-item">
+                                        <input type="radio" id="com-credita-icms-nao" name="com-credita-icms" value="nao">
+                                        <label for="com-credita-icms-nao">Não</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="com-credita-ipi">Credita IPI?</label>
+                                <div class="radio-group">
+                                    <div class="radio-item">
+                                        <input type="radio" id="com-credita-ipi-sim" name="com-credita-ipi" value="sim">
+                                        <label for="com-credita-ipi-sim">Sim</label>
+                                    </div>
+                                    <div class="radio-item">
+                                        <input type="radio" id="com-credita-ipi-nao" name="com-credita-ipi" value="nao" checked>
+                                        <label for="com-credita-ipi-nao">Não</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="group-box">
+                            <h3>Tributação na Venda</h3>
+                            <div class="form-group">
+                                <label for="com-uf-destino">Estado de Destino:</label>
+                                <select id="com-uf-destino">
+                                    <option value="SP">São Paulo</option>
+                                    <option value="RJ">Rio de Janeiro</option>
+                                    <option value="MG">Minas Gerais</option>
+                                    <!-- Demais estados serão adicionados via JavaScript -->
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="com-aliquota-icms-saida">Alíquota ICMS Saída (%):</label>
+                                <input type="number" id="com-aliquota-icms-saida" value="18" min="0" max="100" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="com-aliquota-ipi-saida">Alíquota IPI Saída (%):</label>
+                                <input type="number" id="com-aliquota-ipi-saida" value="0" min="0" max="100" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="com-tipo-cliente">Tipo de Cliente:</label>
+                                <div class="radio-group">
+                                    <div class="radio-item">
+                                        <input type="radio" id="com-cliente-contribuinte" name="com-tipo-cliente" value="contribuinte" checked>
+                                        <label for="com-cliente-contribuinte">Contribuinte</label>
+                                    </div>
+                                    <div class="radio-item">
+                                        <input type="radio" id="com-cliente-nao-contribuinte" name="com-tipo-cliente" value="nao-contribuinte">
+                                        <label for="com-cliente-nao-contribuinte">Não Contribuinte</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="com-regime-tributario">Regime Tributário:</label>
+                                <select id="com-regime-tributario">
+                                    <option value="simples">Simples Nacional</option>
+                                    <option value="presumido">Lucro Presumido</option>
+                                    <option value="real">Lucro Real</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button id="btn-calcular-comercio" class="btn-calcular">Calcular Precificação</button>
+                    </div>
+
+                    <!-- Painel de resultados (Comércio) -->
+                    <div class="panel">
+                        <div class="group-box">
+                            <h3>Resultados - Sistema Atual</h3>
+                            <table id="tabela-resultado-atual-comercio">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Valor (R$)</th>
+                                        <th>Percentual (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Será preenchido por JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="group-box">
+                            <h3>Resultados - Reforma Tributária</h3>
+                            <table id="tabela-resultado-rt-comercio">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Valor (R$)</th>
+                                        <th>Percentual (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Será preenchido por JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="group-box">
+                            <h3>Comparativo</h3>
+                            <table id="tabela-comparativo-comercio">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Sistema Atual</th>
+                                        <th>Reforma Tributária</th>
+                                        <th>Diferença</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Será preenchido por JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="group-box">
+                            <h3>Exportar Resultados</h3>
+                            <div class="form-group">
+                                <button id="btn-exportar-pdf-comercio">Exportar PDF</button>
+                                <button id="btn-exportar-excel-comercio">Exportar Excel</button>
+                            </div>
+                        </div>
+                        <div class="grafico-container">
+                            <canvas id="grafico-comparativo-comercio"></canvas>
+                            <canvas id="grafico-tributos-comercio"></canvas>
+                            <canvas id="grafico-precos-comercio"></canvas>
+                          </div>                          
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Aba de Indústria -->
+            <div id="industria" class="tab-content">
+                <div class="grid">
+                    <!-- Painel de entrada (Indústria) -->
+                    <div class="panel">
+                        <div class="group-box">
+                            <h3>Dados do Produto Final</h3>
+                            <div class="form-group">
+                                <label for="ind-descricao">Descrição do Produto:</label>
+                                <input type="text" id="ind-descricao" placeholder="Ex: Móvel Planejado XYZ">
+                            </div>
+                            <div class="form-group">
+                                <label for="ind-margem-lucro">Margem de Lucro (%):</label>
+                                <input type="number" id="ind-margem-lucro" value="40" min="0" max="1000" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="ind-outros-custos">Outros Custos (R$):</label>
+                                <input type="text" id="ind-outros-custos" value="0,00" class="valor-monetario">
+                            </div>
+                            <div class="form-group">
+                                <label for="ind-mao-obra">Custo de Mão de Obra (R$):</label>
+                                <input type="text" id="ind-mao-obra" value="0,00" class="valor-monetario">
+                            </div>
+                        </div>
+
+                        <div class="group-box">
+                            <h3>Insumos</h3>
+                            <div id="lista-insumos">
+                                <!-- Cabeçalho da lista de insumos -->
+                                <div class="insumo-item" style="font-weight: bold;">
+                                    <div>Descrição</div>
+                                    <div>Valor (R$)</div>
+                                    <div>ICMS (%)</div>
+                                    <div>IPI (%)</div>
+                                    <div>UF Origem</div>
+                                    <div>Ações</div>
+                                </div>
+                                <!-- Lista de insumos será preenchida por JavaScript -->
+                            </div>
+                            <button id="btn-adicionar-insumo" style="margin-top: 10px;">Adicionar Insumo</button>
+                        </div>
+
+                        <div class="group-box">
+                            <h3>Tributação na Venda</h3>
+                            <div class="form-group">
+                                <label for="ind-uf-destino">Estado de Destino:</label>
+                                <select id="ind-uf-destino">
+                                    <option value="SP">São Paulo</option>
+                                    <option value="RJ">Rio de Janeiro</option>
+                                    <option value="MG">Minas Gerais</option>
+                                    <!-- Demais estados serão adicionados via JavaScript -->
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="ind-aliquota-icms-saida">Alíquota ICMS Saída (%):</label>
+                                <input type="number" id="ind-aliquota-icms-saida" value="18" min="0" max="100" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="ind-aliquota-ipi-saida">Alíquota IPI Saída (%):</label>
+                                <input type="number" id="ind-aliquota-ipi-saida" value="10" min="0" max="100" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="ind-contribuinte-ipi">Empresa é contribuinte de IPI?</label>
+                                <div class="radio-group">
+                                    <div class="radio-item">
+                                        <input type="radio" id="ind-contribuinte-ipi-sim" name="ind-contribuinte-ipi" value="sim" checked>
+                                        <label for="ind-contribuinte-ipi-sim">Sim</label>
+                                    </div>
+                                    <div class="radio-item">
+                                        <input type="radio" id="ind-contribuinte-ipi-nao" name="ind-contribuinte-ipi" value="nao">
+                                        <label for="ind-contribuinte-ipi-nao">Não</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="ind-tipo-cliente">Tipo de Cliente:</label>
+                                <div class="radio-group">
+                                    <div class="radio-item">
+                                        <input type="radio" id="ind-cliente-contribuinte" name="ind-tipo-cliente" value="contribuinte" checked>
+                                        <label for="ind-cliente-contribuinte">Contribuinte</label>
+                                    </div>
+                                    <div class="radio-item">
+                                        <input type="radio" id="ind-cliente-nao-contribuinte" name="ind-tipo-cliente" value="nao-contribuinte">
+                                        <label for="ind-cliente-nao-contribuinte">Não Contribuinte</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="ind-regime-tributario">Regime Tributário:</label>
+                                <select id="ind-regime-tributario">
+                                    <option value="simples">Simples Nacional</option>
+                                    <option value="presumido">Lucro Presumido</option>
+                                    <option value="real">Lucro Real</option>
+                                </select>
+                            </div>
+                            <div class="grafico-container">
+                                <canvas id="grafico-comparativo-industria"></canvas>
+                                <canvas id="grafico-tributos-industria"></canvas>
+                                <canvas id="grafico-precos-industria"></canvas>
+                              </div>                              
+                        </div>
+
+                        <button id="btn-calcular-industria" class="btn-calcular">Calcular Precificação</button>
+                    </div>
+
+                    <!-- Painel de resultados (Indústria) -->
+                    <div class="panel">
+                        <div class="group-box">
+                            <h3>Resultados - Sistema Atual</h3>
+                            <table id="tabela-resultado-atual-industria">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Valor (R$)</th>
+                                        <th>Percentual (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Será preenchido por JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="group-box">
+                            <h3>Resultados - Reforma Tributária</h3>
+                            <table id="tabela-resultado-rt-industria">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Valor (R$)</th>
+                                        <th>Percentual (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Será preenchido por JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="group-box">
+                            <h3>Comparativo</h3>
+                            <table id="tabela-comparativo-industria">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Sistema Atual</th>
+                                        <th>Reforma Tributária</th>
+                                        <th>Diferença</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Será preenchido por JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="group-box">
+                            <h3>Exportar Resultados</h3>
+                            <div class="form-group">
+                                <button id="btn-exportar-pdf-industria">Exportar PDF</button>
+                                <button id="btn-exportar-excel-industria">Exportar Excel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Aba de Configurações -->
+            <div id="configuracoes" class="tab-content">
+                <div class="group-box">
+                    <h3>Configurações da Reforma Tributária</h3>
+                    <div class="form-group">
+                        <label for="config-aliquota-cbs">Alíquota CBS (%):</label>
+                        <input type="number" id="config-aliquota-cbs" value="8.8" min="0" max="100" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="config-aliquota-ibs">Alíquota IBS (%):</label>
+                        <input type="number" id="config-aliquota-ibs" value="17.7" min="0" max="100" step="0.1">
+                    </div>
+                </div>
+
+                <div class="group-box">
+                    <h3>Configurações de PIS/COFINS</h3>
+                    <div class="form-group">
+                        <label for="config-aliquota-pis">Alíquota PIS (%):</label>
+                        <input type="number" id="config-aliquota-pis" value="1.65" min="0" max="100" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="config-aliquota-cofins">Alíquota COFINS (%):</label>
+                        <input type="number" id="config-aliquota-cofins" value="7.6" min="0" max="100" step="0.01">
+                    </div>
+                </div>
+
+                <div class="group-box">
+                    <h3>Configurações de Simples Nacional</h3>
+                    <div class="form-group">
+                        <label for="config-aliquota-simples-comercio">Alíquota Simples Nacional - Comércio (%):</label>
+                        <input type="number" id="config-aliquota-simples-comercio" value="5.47" min="0" max="100" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="config-aliquota-simples-industria">Alíquota Simples Nacional - Indústria (%):</label>
+                        <input type="number" id="config-aliquota-simples-industria" value="7.82" min="0" max="100" step="0.01">
+                    </div>
+                </div>
+
+                <div class="group-box">
+                    <h3>Configurações de Lucro Presumido</h3>
+                    <div class="form-group">
+                        <label for="config-presumido-irpj-comercio">Presunção IRPJ - Comércio (%):</label>
+                        <input type="number" id="config-presumido-irpj-comercio" value="8" min="0" max="100" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="config-presumido-irpj-industria">Presunção IRPJ - Indústria (%):</label>
+                        <input type="number" id="config-presumido-irpj-industria" value="8" min="0" max="100" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="config-presumido-csll-comercio">Presunção CSLL - Comércio (%):</label>
+                        <input type="number" id="config-presumido-csll-comercio" value="12" min="0" max="100" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="config-presumido-csll-industria">Presunção CSLL - Indústria (%):</label>
+                        <input type="number" id="config-presumido-csll-industria" value="12" min="0" max="100" step="0.01">
+                    </div>
+                </div>
+
+                <div class="group-box">
+                    <h3>Configurações de Alíquotas IRPJ/CSLL</h3>
+                    <div class="form-group">
+                        <label for="config-aliquota-irpj">Alíquota IRPJ (%):</label>
+                        <input type="number" id="config-aliquota-irpj" value="15" min="0" max="100" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="config-aliquota-irpj-adicional">Alíquota Adicional IRPJ (%):</label>
+                        <input type="number" id="config-aliquota-irpj-adicional" value="10" min="0" max="100" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="config-aliquota-csll">Alíquota CSLL (%):</label>
+                        <input type="number" id="config-aliquota-csll" value="9" min="0" max="100" step="0.01">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <button id="btn-salvar-config">Salvar Configurações</button>
+                    <button id="btn-restaurar-config">Restaurar Padrões</button>
+                </div>
+            </div>
+            
+            <!-- Aba de Ajuda -->
+            <div id="ajuda" class="tab-content">
+                <div class="group-box">
+                    <h3>Como Usar a Calculadora</h3>
+                    <p>Esta calculadora permite simular a precificação de produtos tanto no sistema tributário atual quanto no sistema da Reforma Tributária, para os segmentos de comércio e indústria.</p>
+                    
+                    <h4>Aba Comércio</h4>
+                    <p>Utilize esta aba para simular a precificação de produtos comercializados, considerando:</p>
+                    <ul>
+                        <li>Valor de compra e despesas acessórias</li>
+                        <li>Origem e destino da mercadoria</li>
+                        <li>Alíquotas de ICMS e IPI na entrada e saída</li>
+                        <li>Tipo de cliente (contribuinte ou não contribuinte de ICMS)</li>
+                        <li>Regime tributário da empresa</li>
+                    </ul>
+                    
+                    <h4>Aba Indústria</h4>
+                    <p>Utilize esta aba para simular a precificação de produtos industrializados, considerando:</p>
+                    <ul>
+                        <li>Múltiplos insumos com diferentes tributações</li>
+                        <li>Custo de mão de obra e outros custos</li>
+                        <li>Se a empresa é contribuinte de IPI ou não</li>
+                        <li>Tipo de cliente e destino do produto final</li>
+                    </ul>
+                    
+                    <h4>Configurações</h4>
+                    <p>Na aba de configurações, você pode personalizar:</p>
+                    <ul>
+                        <li>Alíquotas do sistema atual (PIS, COFINS, IRPJ, CSLL)</li>
+                        <li>Alíquotas da Reforma Tributária (CBS e IBS)</li>
+                        <li>Configurações específicas para Simples Nacional e Lucro Presumido</li>
+                    </ul>
+                </div>
+
+                <div class="group-box">
+                    <h3>Reforma Tributária - Principais Mudanças</h3>
+                    <p>A Reforma Tributária aprovada pela Emenda Constitucional nº 132/2023 traz mudanças significativas no sistema tributário brasileiro, entre elas:</p>
+                    <ul>
+                        <li>Substituição de cinco tributos (PIS, COFINS, IPI, ICMS e ISS) por um IVA Dual composto por:</li>
+                        <ul>
+                            <li>Contribuição sobre Bens e Serviços (CBS) - Federal</li>
+                            <li>Imposto sobre Bens e Serviços (IBS) - Estadual/Municipal</li>
+                        </ul>
+                        <li>Não-cumulatividade plena, com creditamento completo</li>
+                        <li>Alíquota padrão estimada em 26,5% (CBS 8,8% + IBS 17,7%)</li>
+                        <li>Transição de 2026 a 2033</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            &copy; 2025 Expertzy Inteligência Tributária
+        </div>
+    </div>
+
+    <!-- Modal para adicionar/editar insumo -->
+    <div id="modal-insumo" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+        <div style="background-color: white; margin: 10% auto; padding: 20px; border-radius: 8px; width: 400px;">
+            <h3 id="modal-titulo-insumo">Adicionar Insumo</h3>
+            <div class="form-group">
+                <label for="insumo-descricao">Descrição:</label>
+                <input type="text" id="insumo-descricao">
+            </div>
+            <div class="form-group">
+                <label for="insumo-valor">Valor (R$):</label>
+                <input type="text" id="insumo-valor" class="valor-monetario" value="0,00">
+            </div>
+            <div class="form-group">
+                <label for="insumo-icms">Alíquota ICMS (%):</label>
+                <input type="number" id="insumo-icms" value="18" min="0" max="100" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="insumo-ipi">Alíquota IPI (%):</label>
+                <input type="number" id="insumo-ipi" value="0" min="0" max="100" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="insumo-uf-origem">Estado de Origem:</label>
+                <select id="insumo-uf-origem">
+                    <option value="SP">São Paulo</option>
+                    <option value="RJ">Rio de Janeiro</option>
+                    <option value="MG">Minas Gerais</option>
+                    <!-- Demais estados serão adicionados via JavaScript -->
+                </select>
+            </div>
+            <div class="form-group" style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="btn-salvar-insumo">Salvar</button>
+                <button id="btn-cancelar-insumo">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-ui/1.12.1/jquery-ui.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-ui-touch-punch/0.2.3/jquery.ui.touch-punch.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <!-- Biblioteca jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Plugin autoTable para jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <script src="calculadora-rt-js.js"></script>
+</body>
+</html>

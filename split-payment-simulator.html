@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Impacto do Split Payment no Fluxo de Caixa</title>
+    
+     <!-- Bibliotecas externas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- Arquivos CSS próprios -->
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/tabs.css">
+    <link rel="stylesheet" href="css/forms.css">
+    <link rel="stylesheet" href="css/charts.css">
+    <link rel="stylesheet" href="css/modals.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="imagens/expertzy-it.png" alt="Expertzy Inteligência Tributária" class="logo">
+            <h1>Simulador de Impacto do Split Payment no Fluxo de Caixa</h1>
+        </div>    
+        
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-button active" data-tab="simulacao">Simulação</button>
+                <button class="tab-button" data-tab="configuracoes">Configurações</button>
+                <button class="tab-button" data-tab="estrategias">Estratégias de Mitigação</button>
+                <button class="tab-button" data-tab="memoria">Memória de Cálculo</button>
+                <button class="tab-button" data-tab="ajuda">Ajuda e Documentação</button>
+            </div>
+            
+            <!-- Aba de Simulação -->
+            <div id="simulacao" class="tab-content active">
+                <div class="grid">
+                    <!-- Painel de entrada -->
+                    <div class="panel">
+                        <!-- Seção "Dados da Empresa" modificada -->
+					<div class="group-box">
+						<h3>Dados da Empresa</h3>
+						<div class="form-group">
+							<label for="empresa">Empresa:</label>
+							<input type="text" id="empresa" placeholder="Nome da empresa">
+						</div>
+						<div class="form-row">
+							<div class="form-column">
+								<div class="form-group">
+									<label for="faturamento">Faturamento Mensal:</label>
+									<input type="text" id="faturamento" value="0" class="money-input">
+								</div>
+							</div>
+							<div class="form-column">
+								<div class="form-group">
+									<label for="margem">Margem Operacional (%):</label>
+									<input type="number" id="margem" value="15" min="0" max="100" step="0.1">
+								</div>
+							</div>
+						</div>
+						<div class="form-row">
+							<div class="form-column">
+								<div class="form-group">
+									<label for="regime">Regime Tributário:</label>
+									<select id="regime">
+										<option value="">Selecione o regime tributário...</option>
+										<option value="simples">Simples Nacional</option>
+										<option value="presumido">Lucro Presumido</option>
+										<option value="real">Lucro Real</option>
+									</select>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="form-column">
+						<div class="form-group">
+							<label for="setor">Setor de Atividade:</label>
+							<select id="setor" class="form-control">
+								<option value="">Selecione uma atividade...</option>
+								<!-- Opções serão preenchidas via SetoresRepository -->
+							</select>
+						</div>
+
+						<!-- Seção "Tributação e Split Payment" modificada -->
+						<div class="group-box">
+							<h3>Tributação e Split Payment</h3>
+							<div class="form-row">
+								<div class="form-column">
+									<div class="form-group">
+										<label for="aliquota">Alíquota Efetiva (%):</label>
+										<input type="number" id="aliquota" name="aliquota" value="26.5" min="0" max="100" step="0.1">
+										<small class="text-muted">Ajuste conforme o setor selecionado</small>
+									</div>
+								</div>
+								<div class="form-column">
+									<div class="form-group">
+										<label for="reducao">Redução Especial (%):</label>
+										<input type="number" id="reducao" name="reducao" value="0.0" min="0" max="100" step="0.1">
+										<small class="text-muted">Ajuste conforme o setor selecionado</small>
+									</div>
+								</div>
+							</div>
+							<div class="form-row">
+								<div class="form-column">
+									<div class="form-group">
+										<label for="tipo-operacao">Tipo de Operação:</label>
+										<select id="tipo-operacao">
+											<option value="b2b">B2B (Empresa-Empresa)</option>
+											<option value="b2c">B2C (Empresa-Consumidor)</option>
+											<option value="mista">Mista</option>
+										</select>
+									</div>
+								</div>
+								<div class="form-column">
+									<div class="form-group">
+										<label for="creditos">Créditos Tributários Mensais:</label>
+										<input type="text" id="creditos" value="0" class="money-input">
+									</div>
+								</div>
+							</div>
+							<div class="form-row">
+								<div class="form-column">
+									<div class="form-group">
+										<label for="compensacao">Compensação de Créditos:</label>
+										<select id="compensacao">
+											<option value="automatica">Automática (Tempo Real)</option>
+											<option value="mensal">Mensal</option>
+											<option value="trimestral">Trimestral</option>
+										</select>
+									</div>
+								</div>
+							</div>
+						</div>
+					<div class="group-box">
+						<h3>Ciclo Financeiro</h3>
+						<div class="form-row">
+							<div class="form-column">
+								<div class="form-group">
+									<label for="pmr">Prazo Médio de Recebimento (dias):</label>
+									<input type="number" id="pmr" value="30" min="0" step="1">
+								</div>
+							</div>
+							<div class="form-column">
+								<div class="form-group">
+									<label for="pmp">Prazo Médio de Pagamento (dias):</label>
+									<input type="number" id="pmp" value="30" min="0" step="1">
+								</div>
+							</div>
+						</div>
+						<div class="form-row">
+							<div class="form-column">
+								<div class="form-group">
+									<label for="pme">Prazo Médio de Estoque (dias):</label>
+									<input type="number" id="pme" value="30" min="0" step="1">
+								</div>
+							</div>
+							<div class="form-column">
+								<div class="form-group">
+									<label for="ciclo-financeiro">Ciclo Financeiro (dias):</label>
+									<input type="number" id="ciclo-financeiro" value="30" readonly>
+								</div>
+							</div>
+							<div class="form-column">
+								<div class="form-group checkbox-group">
+									<input type="checkbox" id="considerar-split" name="considerar-split">
+									<label for="considerar-split">Considerar Split Payment no cálculo</label>
+									<span class="tooltip">
+										<i class="info-icon">i</i>
+										<span class="tooltip-text">Ajusta o ciclo financeiro de acordo com o impacto do Split Payment, considerando o percentual de implementação do ano selecionado.</span>
+									</span>
+								</div>
+							</div>
+						</div>
+						
+						<!-- Campos opcionais para exibir a NCG (inicialmente ocultos) -->
+						<div id="campos-ncg" style="display: none;" class="form-row">
+							<div class="form-column">
+								<div class="form-group">
+									<label for="ncg-atual">NCG Atual:</label>
+									<input type="text" id="ncg-atual" readonly>
+								</div>
+							</div>
+							<div class="form-column">
+								<div class="form-group">
+									<label for="ncg-ajustada">NCG com Split Payment:</label>
+									<input type="text" id="ncg-ajustada" readonly>
+								</div>
+							</div>
+							<div class="form-column">
+								<div class="form-group">
+									<label for="diferenca-ncg">Impacto no Capital de Giro:</label>
+									<input type="text" id="diferenca-ncg" readonly class="impact-field">
+								</div>
+							</div>
+						</div>
+						<div class="form-row">
+							<div class="form-column">
+								<div class="form-group">
+									<label for="perc-vista">Percentual de Vendas à Vista (%):</label>
+									<input type="number" id="perc-vista" value="30" min="0" max="100" step="1">
+								</div>
+							</div>
+							<div class="form-column">
+								<div class="form-group">
+									<label for="perc-prazo">Percentual de Vendas a Prazo (%):</label>
+									<input type="text" id="perc-prazo" value="70%" readonly>
+								</div>
+							</div>
+						</div>
+					</div>				
+
+							<div class="group-box">
+								<h3>Parâmetros da Simulação</h3>
+								<div class="form-row">
+									<div class="form-column">
+										<div class="form-group">
+											<label for="data-inicial">Data Inicial:</label>
+											<input type="date" id="data-inicial" value="2026-01-01">
+										</div>
+									</div>
+									<div class="form-column">
+										<div class="form-group">
+											<label for="data-final">Data Final:</label>
+											<input type="date" id="data-final" value="2033-12-31">
+										</div>
+									</div>
+								</div>
+								<div class="form-row">
+									<div class="form-column">
+										<div class="form-group">
+											<label for="cenario">Cenário de Crescimento:</label>
+											<select id="cenario">
+												<option value="">Selecione um cenário...</option>
+												<option value="conservador">Conservador (2% a.a.)</option>
+												<option value="moderado">Moderado (5% a.a.)</option>
+												<option value="otimista">Otimista (8% a.a.)</option>
+												<option value="personalizado">Personalizado</option>
+											</select>
+										</div>
+									</div>
+									<div class="form-column">
+										<div class="form-group" id="cenario-personalizado" style="display: none;">
+											<label for="taxa-crescimento">Taxa de Crescimento (% a.a.):</label>
+											<input type="number" id="taxa-crescimento" value="5" min="0" max="100" step="0.1">
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+                        <!-- Para estas duas linhas (adicionando um container para os botões) -->
+						<div class="button-group" style="display: flex; gap: 10px; margin-top: 20px;">
+							<button id="btn-simular" style="flex: 3; padding: 15px; font-size: 16px;">Simular Impacto no Fluxo de Caixa</button>
+							<button id="btn-limpar" style="flex: 1; padding: 15px; font-size: 16px;" class="btn-secondary">Limpar</button>
+						</div>
+                    </div>
+
+                    <!-- Painel de resultados -->
+                    <div class="panel">
+                        <h3>Resultados da Simulação</h3>
+                        <div id="resultados">
+                            <p class="text-muted">Preencha os dados e clique em "Simular" para visualizar os resultados.</p>
+                        </div>
+
+                        <!-- Modificar a seção de gráficos na aba de simulação -->
+						<div class="group-box">
+							<h3>Gráficos Comparativos</h3>
+							<div class="charts-grid">
+								<div class="chart-container">
+									<canvas id="grafico-fluxo-caixa"></canvas>
+								</div>
+								<div class="chart-container">
+									<canvas id="grafico-capital-giro"></canvas>
+								</div>
+								<div class="chart-container">
+									<canvas id="grafico-projecao"></canvas>
+								</div>
+								<div class="chart-container">
+									<canvas id="grafico-decomposicao"></canvas>
+								</div>
+								<div class="chart-container">
+									<canvas id="grafico-sensibilidade"></canvas>
+								</div>
+							</div>
+						</div>
+
+                        <div class="group-box">
+                            <h3>Exportar Resultados</h3>
+                            <div class="button-group">
+                                <button id="btn-exportar-pdf">Exportar PDF</button>
+                                <button id="btn-exportar-excel">Exportar Excel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conteúdo da aba Configurações - manter o ID original -->
+			<div id="configuracoes" class="tab-content">
+				<h2>Configurações</h2>
+				
+				<!-- Parâmetros Gerais do Split Payment -->
+				<div class="panel mb-4">
+					<h3 class="panel-title">Parâmetros Gerais do Split Payment</h3>
+					<p class="text-muted mb-3">Configure os valores base para o cálculo do split payment que serão aplicados a todos os setores, exceto quando houver configurações específicas.</p>
+
+					<div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 20px;">
+						<div class="form-group">
+							<label for="aliquota-cbs">Alíquota CBS (%):</label>
+							<div class="input-group">
+								<input type="number" id="aliquota-cbs" name="aliquota-cbs" min="0" max="100" step="0.01" value="8.8">
+								<div class="input-group-append">
+									<span class="input-group-text">%</span>
+								</div>
+							</div>
+							<small class="help-text">Contribuição sobre Bens e Serviços - Alíquota Federal</small>
+						</div>
+						<div class="form-group">
+							<label for="aliquota-ibs">Alíquota IBS (%):</label>
+							<div class="input-group">
+								<input type="number" id="aliquota-ibs" name="aliquota-ibs" min="0" max="100" step="0.01" value="17.7">
+								<div class="input-group-append">
+									<span class="input-group-text">%</span>
+								</div>
+							</div>
+							<small class="help-text">Imposto sobre Bens e Serviços - Alíquota Estadual/Municipal</small>
+						</div>
+						<div class="form-group">
+							<label for="data-inicio">Data de Início:</label>
+							<input type="month" id="data-inicio" name="data-inicio" value="2026-01" min="2026-01">
+							<small class="help-text">Início da implementação do split payment</small>
+						</div>
+					</div>
+					
+					<h3 class="section-subtitle mt-4">Cronograma de Implementação</h3>
+					<p class="text-muted mb-3">Defina o percentual de implementação do split payment ao longo dos anos de transição (2026-2033).</p>
+					
+					<div class="table-actions">
+						<button type="button" class="btn btn-outline" id="btn-restaurar-cronograma">Restaurar Cronograma Padrão</button>
+					</div>
+					
+					<div class="table-container">
+						<table class="editable-table cronograma-table" id="cronograma-table">
+							<thead>
+								<tr>
+									<th>Ano</th>
+									<th>Percentual (%)</th>
+									<th>Observações</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>2026</td>
+									<td><input type="number" name="perc-2026" min="0" max="100" step="0.1" value="10.0"></td>
+									<td><input type="text" name="obs-2026" placeholder="Observações..."></td>
+								</tr>
+								<tr>
+									<td>2027</td>
+									<td><input type="number" name="perc-2027" min="0" max="100" step="0.1" value="25.0"></td>
+									<td><input type="text" name="obs-2027" placeholder="Observações..."></td>
+								</tr>
+								<tr>
+									<td>2028</td>
+									<td><input type="number" name="perc-2028" min="0" max="100" step="0.1" value="40.0"></td>
+									<td><input type="text" name="obs-2028" placeholder="Observações..."></td>
+								</tr>
+								<tr>
+									<td>2029</td>
+									<td><input type="number" name="perc-2029" min="0" max="100" step="0.1" value="55.0"></td>
+									<td><input type="text" name="obs-2029" placeholder="Observações..."></td>
+								</tr>
+								<tr>
+									<td>2030</td>
+									<td><input type="number" name="perc-2030" min="0" max="100" step="0.1" value="70.0"></td>
+									<td><input type="text" name="obs-2030" placeholder="Observações..."></td>
+								</tr>
+								<tr>
+									<td>2031</td>
+									<td><input type="number" name="perc-2031" min="0" max="100" step="0.1" value="85.0"></td>
+									<td><input type="text" name="obs-2031" placeholder="Observações..."></td>
+								</tr>
+								<tr>
+									<td>2032</td>
+									<td><input type="number" name="perc-2032" min="0" max="100" step="0.1" value="95.0"></td>
+									<td><input type="text" name="obs-2032" placeholder="Observações..."></td>
+								</tr>
+								<tr>
+									<td>2033</td>
+									<td><input type="number" name="perc-2033" min="0" max="100" step="0.1" value="100.0"></td>
+									<td><input type="text" name="obs-2033" placeholder="Observações..."></td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
+				
+				<!-- Configurações Específicas por Setor -->
+				<div class="panel mb-4">
+					<h3 class="panel-title">Configurações Específicas por Setor</h3>
+					<p class="text-muted mb-3">Configure parâmetros específicos para setores que possuem tratamento diferenciado no regime do split payment.</p>
+					
+					<div class="table-actions">
+						<button type="button" class="btn btn-primary" id="btn-adicionar-setor">Adicionar Setor</button>
+					</div>
+					
+					<div class="table-container">
+						<table class="editable-table sector-table" id="sector-table">
+							<thead>
+								<tr>
+									<th>Setor</th>
+									<th>Alíquota Específica (%)</th>
+									<th>Redução Especial (%)</th>
+									<th>Cronograma Próprio</th>
+									<th class="actions-column">Ações</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr id="setor-1">
+									<td>
+										<select name="setor-nome-1" class="setor-select" data-id="1">
+											<option value="">Selecione um setor...</option>
+											<!-- Opções de setores serão adicionadas via JavaScript -->
+										</select>
+									</td>
+									<td><input type="number" name="setor-aliquota-1" min="0" max="100" step="0.01" value="26.5"></td>
+									<td><input type="number" name="setor-reducao-1" min="0" max="100" step="0.01" value="0"></td>
+									<td>
+										<select name="setor-cronograma-1">
+											<option value="padrao">Cronograma Padrão</option>
+											<option value="proprio">Cronograma Específico</option>
+										</select>
+									</td>
+									<td>
+										<button type="button" class="btn btn-outline btn-sm" onclick="configurarCronogramaSetor(1)">Configurar</button>
+										<button type="button" class="btn btn-accent btn-sm" onclick="removerSetor(1)">Remover</button>
+									</td>
+								</tr>
+								<tr id="setor-2">
+									<td>
+										<select name="setor-nome-2" class="setor-select" data-id="2">
+											<option value="">Selecione um setor...</option>
+											<!-- Opções de setores serão adicionadas via JavaScript -->
+										</select>
+									</td>
+									<td><input type="number" name="setor-aliquota-2" min="0" max="100" step="0.01" value="26.5"></td>
+									<td><input type="number" name="setor-reducao-2" min="0" max="100" step="0.01" value="0"></td>
+									<td>
+										<select name="setor-cronograma-2">
+											<option value="padrao">Cronograma Padrão</option>
+											<option value="proprio">Cronograma Específico</option>
+										</select>
+									</td>
+									<td>
+										<button type="button" class="btn btn-outline btn-sm" onclick="configurarCronogramaSetor(2)">Configurar</button>
+										<button type="button" class="btn btn-accent btn-sm" onclick="removerSetor(2)">Remover</button>
+									</td>
+								</tr>
+								<tr id="setor-3">
+									<td>
+										<select name="setor-nome-3" class="setor-select" data-id="3">
+											<option value="">Selecione um setor...</option>
+											<!-- Opções de setores serão adicionadas via JavaScript -->
+										</select>
+									</td>
+									<td><input type="number" name="setor-aliquota-3" min="0" max="100" step="0.01" value="26.5"></td>
+									<td><input type="number" name="setor-reducao-3" min="0" max="100" step="0.01" value="0"></td>
+									<td>
+										<select name="setor-cronograma-3">
+											<option value="padrao">Cronograma Padrão</option>
+											<option value="proprio">Cronograma Específico</option>
+										</select>
+									</td>
+									<td>
+										<button type="button" class="btn btn-outline btn-sm" onclick="configurarCronogramaSetor(3)">Configurar</button>
+										<button type="button" class="btn btn-accent btn-sm" onclick="removerSetor(3)">Remover</button>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
+				
+				<!-- Parâmetros Financeiros -->
+				<div class="panel mb-4">
+					<h3 class="panel-title">Parâmetros Financeiros</h3>
+					<p class="text-muted mb-3">Configure os parâmetros financeiros para cálculo do impacto do split payment no capital de giro e fluxo de caixa.</p>
+					
+					<div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 20px;">
+						<div class="form-group">
+							<label for="taxa-antecipacao">Taxa Média de Antecipação de Recebíveis:</label>
+							<div class="input-group">
+								<input type="number" id="taxa-antecipacao" name="taxa-antecipacao" min="0" max="100" step="0.01" value="1.8">
+								<div class="input-group-append">
+									<span class="input-group-text">% a.m.</span>
+								</div>
+							</div>
+							<small class="help-text">Taxa média para antecipação de recebíveis ao mês</small>
+						</div>
+						
+						<div class="form-group">
+							<label for="taxa-capital-giro">Taxa Média de Capital de Giro:</label>
+							<div class="input-group">
+								<input type="number" id="taxa-capital-giro" name="taxa-capital-giro" min="0" max="100" step="0.01" value="2.1">
+								<div class="input-group-append">
+									<span class="input-group-text">% a.m.</span>
+								</div>
+							</div>
+							<small class="help-text">Taxa média para linhas de capital de giro ao mês</small>
+						</div>
+						
+						<div class="form-group">
+							<label for="spread-bancario">Spread Bancário Médio:</label>
+							<div class="input-group">
+								<input type="number" id="spread-bancario" name="spread-bancario" min="0" max="100" step="0.01" value="3.5">
+								<div class="input-group-append">
+									<span class="input-group-text">p.p.</span>
+								</div>
+							</div>
+							<small class="help-text">Spread bancário médio em pontos percentuais</small>
+						</div>
+					</div>
+					
+					<div class="form-group mt-3">
+						<label for="observacoes-financeiras">Observações Adicionais:</label>
+						<textarea id="observacoes-financeiras" name="observacoes-financeiras" rows="3" placeholder="Insira aqui observações adicionais sobre os parâmetros financeiros..."></textarea>
+					</div>
+				</div>
+				
+				<!-- Botões de Ação -->
+				<div class="form-actions">
+					<button type="button" class="btn btn-primary" id="btn-salvar-configuracoes">Salvar Configurações</button>
+					<button type="button" class="btn btn-secondary" id="btn-restaurar-padroes">Restaurar Padrões</button>
+				</div>
+				
+				<!-- Modal para Configuração de Cronograma Setorial -->
+				<div class="modal-backdrop" id="modal-cronograma-setor">
+					<div class="modal">
+						<div class="modal-header">
+							<h3 class="modal-title">Cronograma Específico para Setor</h3>
+							<button type="button" class="modal-close" id="btn-fechar-modal">&times;</button>
+						</div>
+						<div class="modal-body">
+							<div class="mb-3">
+								<label for="modal-setor-nome" class="fw-bold">Setor:</label>
+								<span id="modal-setor-nome"></span>
+								<input type="hidden" id="modal-setor-id">
+							</div>
+							
+							<div class="table-container">
+								<table class="editable-table cronograma-table" id="cronograma-setor-table">
+									<thead>
+										<tr>
+											<th>Ano</th>
+											<th>Percentual (%)</th>
+											<th>Observações</th>
+										</tr>
+									</thead>
+									<tbody>
+										<!-- Será preenchido dinamicamente por JavaScript -->
+									</tbody>
+								</table>
+							</div>
+						</div>
+						<div class="modal-footer">
+							<button type="button" class="btn btn-primary" id="btn-salvar-cronograma-setor">Salvar</button>
+							<button type="button" class="btn btn-secondary" id="btn-cancelar-modal">Cancelar</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+            <!-- Aba de Estratégias de Mitigação -->
+            <div id="estrategias" class="tab-content">
+                <div class="strategy-tab-container">
+                    <div class="strategy-tab-buttons">
+                        <button class="strategy-tab-button active" data-strategy-tab="ajuste-precos">Ajuste de Preços</button>
+                        <button class="strategy-tab-button" data-strategy-tab="renegociacao-prazos">Renegociação de Prazos</button>
+                        <button class="strategy-tab-button" data-strategy-tab="antecipacao-recebiveis">Antecipação de Recebíveis</button>
+                        <button class="strategy-tab-button" data-strategy-tab="capital-giro">Capital de Giro</button>
+                        <button class="strategy-tab-button" data-strategy-tab="mix-produtos">Mix de Produtos</button>
+                        <button class="strategy-tab-button" data-strategy-tab="meios-pagamento">Meios de Pagamento</button>
+                    </div>
+                    
+                    <!-- Ajuste de Preços -->
+                    <div id="estrategia-ajuste-precos" class="strategy-tab-content active">
+                        <div class="group-box">
+                            <h3>Ajuste de Preços</h3>
+                            <p>Compensar a perda de fluxo de caixa através de aumento em preços.</p>
+                            
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="ap-ativar">Ativar Estratégia:</label>
+                                        <select id="ap-ativar">
+                                            <option value="0">Não</option>
+                                            <option value="1">Sim</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="ap-percentual">Percentual de Aumento (%):</label>
+                                        <input type="number" id="ap-percentual" value="5" min="0" max="100" step="0.1">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="ap-elasticidade">Elasticidade-Preço da Demanda:</label>
+                                        <input type="number" id="ap-elasticidade" value="-1.2" step="0.1">
+                                    </div>
+                                </div>
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="ap-impacto-vendas">Impacto nas Vendas (%):</label>
+                                        <input type="number" id="ap-impacto-vendas" value="0" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="ap-periodo">Período de Ajuste (meses):</label>
+                                        <input type="number" id="ap-periodo" value="3" min="1" step="1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Renegociação de Prazos -->
+                    <div id="estrategia-renegociacao-prazos" class="strategy-tab-content">
+                        <div class="group-box">
+                            <h3>Renegociação de Prazos</h3>
+                            <p>Negociar prazos mais longos com fornecedores para melhorar o ciclo financeiro.</p>
+                            
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="rp-ativar">Ativar Estratégia:</label>
+                                        <select id="rp-ativar">
+                                            <option value="0">Não</option>
+                                            <option value="1">Sim</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="rp-aumento-prazo">Aumento do Prazo (dias):</label>
+                                        <input type="number" id="rp-aumento-prazo" value="15" min="0" step="1">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="rp-percentual">Percentual de Fornecedores (%):</label>
+                                        <input type="number" id="rp-percentual" value="60" min="0" max="100" step="1">
+                                    </div>
+                                </div>
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="rp-contrapartidas">Contrapartidas:</label>
+                                        <select id="rp-contrapartidas">
+                                            <option value="nenhuma">Nenhuma</option>
+                                            <option value="volume">Aumento de Volume</option>
+                                            <option value="precos">Reajuste de Preços</option>
+                                            <option value="contratos">Compromisso Contratual</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="rp-custo">Custo da Contrapartida (%):</label>
+                                        <input type="number" id="rp-custo" value="0" min="0" step="0.1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Antecipação de Recebíveis -->
+                    <div id="estrategia-antecipacao-recebiveis" class="strategy-tab-content">
+                        <div class="group-box">
+                            <h3>Antecipação de Recebíveis</h3>
+                            <p>Antecipar recebíveis para compensar o impacto no capital de giro.</p>
+                            
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="ar-ativar">Ativar Estratégia:</label>
+                                        <select id="ar-ativar">
+                                            <option value="0">Não</option>
+                                            <option value="1">Sim</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="ar-percentual">Percentual de Antecipação (%):</label>
+                                        <input type="number" id="ar-percentual" value="50" min="0" max="100" step="1">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="ar-taxa">Taxa de Desconto (% a.m.):</label>
+                                        <input type="number" id="ar-taxa" value="1.8" min="0" step="0.1">
+                                    </div>
+                                </div>
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="ar-prazo">Prazo Médio Antecipado (dias):</label>
+                                        <input type="number" id="ar-prazo" value="25" min="0" step="1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Capital de Giro -->
+                    <div id="estrategia-capital-giro" class="strategy-tab-content">
+                        <div class="group-box">
+                            <h3>Capital de Giro</h3>
+                            <p>Contratação de linha de capital de giro para suprir a necessidade adicional.</p>
+                            
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="cg-ativar">Ativar Estratégia:</label>
+                                        <select id="cg-ativar">
+                                            <option value="0">Não</option>
+                                            <option value="1">Sim</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="cg-valor">Valor de Captação (%):</label>
+                                        <input type="number" id="cg-valor" value="100" min="0" max="200" step="1">
+                                        <small>Percentual da necessidade adicional de capital</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="cg-taxa">Taxa de Juros (% a.m.):</label>
+                                        <input type="number" id="cg-taxa" value="2.1" min="0" step="0.1">
+                                    </div>
+                                </div>
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="cg-prazo">Prazo de Pagamento (meses):</label>
+                                        <input type="number" id="cg-prazo" value="12" min="1" step="1">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="cg-carencia">Carência (meses):</label>
+                                        <input type="number" id="cg-carencia" value="3" min="0" step="1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Mix de Produtos -->
+                    <div id="estrategia-mix-produtos" class="strategy-tab-content">
+                        <div class="group-box">
+                            <h3>Mix de Produtos</h3>
+                            <p>Ajustar mix de produtos para priorizar itens com ciclo financeiro mais favorável.</p>
+                            
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="mp-ativar">Ativar Estratégia:</label>
+                                        <select id="mp-ativar">
+                                            <option value="0">Não</option>
+                                            <option value="1">Sim</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="mp-percentual">Percentual de Ajuste (%):</label>
+                                        <input type="number" id="mp-percentual" value="30" min="0" max="100" step="1">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="mp-foco">Foco do Ajuste:</label>
+                                        <select id="mp-foco">
+                                            <option value="ciclo">Ciclo Financeiro</option>
+                                            <option value="margem">Margem de Contribuição</option>
+                                            <option value="vista">Vendas à Vista</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="mp-impacto-receita">Impacto na Receita (%):</label>
+                                        <input type="number" id="mp-impacto-receita" value="-5" step="0.1">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="mp-impacto-margem">Impacto na Margem (p.p.):</label>
+                                        <input type="number" id="mp-impacto-margem" value="3.5" step="0.1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Meios de Pagamento -->
+                    <div id="estrategia-meios-pagamento" class="strategy-tab-content">
+                        <div class="group-box">
+                            <h3>Meios de Pagamento</h3>
+                            <p>Incentivar meios de pagamento mais favoráveis ao fluxo de caixa.</p>
+                            
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="mp-pag-ativar">Ativar Estratégia:</label>
+                                        <select id="mp-pag-ativar">
+                                            <option value="0">Não</option>
+                                            <option value="1">Sim</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Distribuição Atual:</label>
+                                <div class="form-row">
+                                    <div class="form-column">
+                                        <div class="form-group">
+                                            <label for="mp-pag-vista-atual">À Vista (%):</label>
+                                            <input type="number" id="mp-pag-vista-atual" value="30" min="0" max="100" step="1" readonly>
+                                        </div>
+                                    </div>
+                                    <div class="form-column">
+                                        <div class="form-group">
+                                            <label for="mp-pag-prazo-atual">A Prazo (%):</label>
+                                            <input type="number" id="mp-pag-prazo-atual" value="70" min="0" max="100" step="1" readonly>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Nova Distribuição:</label>
+                                <div class="form-row">
+                                    <div class="form-column">
+                                        <div class="form-group">
+                                            <label for="mp-pag-vista-novo">À Vista (%):</label>
+                                            <input type="number" id="mp-pag-vista-novo" value="40" min="0" max="100" step="1">
+                                        </div>
+                                    </div>
+                                    <div class="form-column">
+                                        <div class="form-group">
+                                            <label for="mp-pag-30-novo">30 dias (%):</label>
+                                            <input type="number" id="mp-pag-30-novo" value="30" min="0" max="100" step="1">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-column">
+                                        <div class="form-group">
+                                            <label for="mp-pag-60-novo">60 dias (%):</label>
+                                            <input type="number" id="mp-pag-60-novo" value="20" min="0" max="100" step="1">
+                                        </div>
+                                    </div>
+                                    <div class="form-column">
+                                        <div class="form-group">
+                                            <label for="mp-pag-90-novo">90 dias (%):</label>
+                                            <input type="number" id="mp-pag-90-novo" value="10" min="0" max="100" step="1">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-column">
+                                    <div class="form-group">
+                                        <label for="mp-pag-taxa-incentivo">Taxa de Incentivo (%):</label>
+                                        <input type="number" id="mp-pag-taxa-incentivo" value="3" min="0" step="0.1">
+                                        <small>Desconto para pagamentos à vista</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="group-box">
+                    <h3>Resultados Estimados com Estratégias</h3>
+                    <div id="resultados-estrategias">
+                        <p class="text-muted">Selecione as estratégias de mitigação e simule para ver os resultados estimados.</p>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    <canvas id="grafico-estrategias"></canvas>
+                </div>
+                
+                <div class="button-group">
+					<button id="btn-simular-estrategias">Simular Estratégias</button>
+					<button id="btn-exportar-estrategias-pdf">Exportar PDF</button>
+					<button id="btn-exportar-estrategias-excel">Exportar Excel</button>
+				</div>
+            </div>
+
+            <!-- Aba de Memória de Cálculo -->
+            <div id="memoria" class="tab-content">
+                <div class="form-group">
+                    <label for="select-ano-memoria">Selecione o ano:</label>
+                    <select id="select-ano-memoria">
+                        <option value="2026">2026</option>
+                        <option value="2027">2027</option>
+                        <option value="2028">2028</option>
+                        <option value="2029">2029</option>
+                        <option value="2030">2030</option>
+                        <option value="2031">2031</option>
+                        <option value="2032">2032</option>
+                        <option value="2033">2033</option>
+                    </select>
+                </div>
+                <button id="btn-atualizar-memoria">Atualizar Memória</button>
+                <div id="memoria-calculo">
+                    Realize uma simulação para gerar a memória de cálculo detalhada.
+                </div>
+                <div class="button-group">
+                    <button id="btn-exportar-memoria">Exportar Memória de Cálculo</button>
+                </div>
+            </div>
+
+            <!-- Aba de Ajuda e Documentação -->
+            <div id="ajuda" class="tab-content">
+                <div class="help-section">
+                    <h3>O que é o Split Payment?</h3>
+                    <p>O Split Payment é um mecanismo introduzido pela reforma tributária brasileira (LC 214/2025) que automatiza o recolhimento tributário no momento da transação comercial, separando o valor do tributo do preço do bem ou serviço e direcionando-o diretamente aos cofres públicos.</p>
+                    <p>Este sistema altera significativamente o fluxo de caixa das empresas, pois elimina o intervalo entre o recebimento da venda e o pagamento do imposto, que tradicionalmente ocorria no mês seguinte.</p>
+                </div>
+
+                <div class="help-section">
+                    <h3>Como funciona o Split Payment?</h3>
+                    <p>No modelo padrão, ao realizar uma venda com split payment, o sistema divide automaticamente o valor:</p>
+                    <ul>
+                        <li><strong>Parte do valor</strong> é creditada diretamente ao vendedor.</li>
+                        <li><strong>Parte correspondente aos impostos</strong> é direcionada automaticamente ao Comitê Gestor do IBS e à Receita Federal.</li>
+                    </ul>
+                    <p>Por exemplo, em uma venda de R$ 1.000 com alíquota de 26,5%, aproximadamente R$ 735,50 são creditados ao vendedor e R$ 264,50 vão direto para o fisco.</p>
+                </div>
+
+                <div class="help-section">
+                    <h3>Impacto no Fluxo de Caixa</h3>
+                    <p>O principal impacto do split payment é a redução do capital de giro disponível, pois o valor do tributo deixa de estar temporariamente sob controle da empresa. No regime anterior, as empresas utilizavam o montante tributário entre o recebimento da venda e o recolhimento do imposto como capital de giro.</p>
+                </div>
+
+                <div class="help-section">
+                    <h3>Como usar o Simulador</h3>
+                    <ol>
+                        <li><strong>Aba Simulação</strong>: Preencha os dados da empresa, ciclo financeiro, parâmetros de tributação e simulação, e clique em "Simular" para visualizar o impacto no fluxo de caixa.</li>
+                        <li><strong>Aba Configurações</strong>: Ajuste parâmetros financeiros e setoriais para personalizar a simulação.</li>
+                        <li><strong>Aba Estratégias de Mitigação</strong>: Teste diferentes estratégias para mitigar o impacto do split payment no fluxo de caixa.</li>
+                        <li><strong>Aba Memória de Cálculo</strong>: Visualize os cálculos detalhados por trás dos resultados apresentados.</li>
+                    </ol>
+                </div>
+
+                <div class="help-section">
+                    <h3>Implementação Progressiva</h3>
+                    <p>O split payment será implementado gradualmente, começando com testes piloto em 2026 e alcançando implementação total em 2033. Durante esse período, apenas uma parcela dos tributos será recolhida via split payment, aumentando progressivamente conforme o cronograma oficial.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            &copy; 2025 Expertzy Inteligência Tributária
+        </div>
+    </div>
+
+    <!-- Modal de confirmação de exclusão -->
+	<div id="modal-confirmar-exclusao" class="modal">
+		<div class="modal-content" style="max-width: 400px;">
+			<div class="modal-header">
+				<h3>Confirmar Exclusão</h3>
+				<span class="close">&times;</span>
+			</div>
+			<div class="modal-body">
+				<p>Tem certeza que deseja excluir o setor <span id="nome-setor-exclusao"></span>?</p>
+				<p>Esta ação não pode ser desfeita.</p>
+			</div>
+			<div class="modal-footer">
+				<button id="btn-confirmar-exclusao" class="primary">Sim, Excluir</button>
+				<button id="btn-cancelar-exclusao" class="secondary">Cancelar</button>
+			</div>
+		</div>
+	</div>
+	
+    <!-- Modal para ajuda contextual -->
+    <div id="modal-ajuda" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-ajuda-titulo">Ajuda</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div id="modal-ajuda-conteudo">
+                <!-- Conteúdo dinâmico da ajuda -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Importação dos scripts JavaScript -->
+    
+    <!-- Scripts principais -->
+	<!-- Primeiro os utilitários -->
+	<script src="js/utils/formatters.js"></script>
+	<script src="js/utils/validators.js"></script>
+	<script src="js/utils/export-tools.js"></script>
+	<script src="js/utils/currency-formatter.js"></script>
+
+	<!-- Depois os repositórios e gerenciadores de configuração -->
+	<script src="js/config/setores-repository.js"></script>
+	<script src="js/repository/simulador-repository.js"></script>
+	<script src="js/config/configuracoes-setoriais.js"></script>
+	<script src="js/config/setores-manager.js"></script>
+	<script src="js/config/config-manager.js"></script>
+
+	<!-- Depois os gerenciadores de UI -->
+	<script src="js/ui/tabs-manager.js"></script>
+	<script src="js/ui/forms-manager.js"></script>
+	<script src="js/ui/charts-manager.js"></script>
+	<script src="js/ui/modal-manager.js"></script>
+	<script src="js/ui/setores-ui.js"></script>
+
+	<!-- Depois os controladores -->
+	<script src="js/ui/simulacao-controller.js"></script>
+	<script src="js/ui/memoria-controller.js"></script>
+	<script src="js/ui/estrategias-controller.js"></script>
+
+	<!-- Depois os módulos de simulação -->
+	<script src="js/simulation/calculation.js"></script>
+	<script src="js/simulation/simulator.js"></script>
+	<script src="js/simulation/simulador-modulo.js"></script>
+	<script src="js/simulation/strategies.js"></script>
+
+	<!-- Por último, o script principal e integração -->
+	<script src="js/integration.js"></script>
+	<script src="js/main.js"></script>
+	
+    <!-- Script direto para atualização dos campos -->
+	<script>
+	function setorSelecionado() {
+      // Obter o elemento select
+      var select = document.getElementById('setor');
+
+      // Obter o valor (código) do setor selecionado
+      var codigoSetor = select.value;
+
+      // Verificar se um setor foi selecionado
+      if (codigoSetor) {
+          // Obter dados do setor diretamente do SetoresRepository
+          if (typeof SetoresRepository !== 'undefined' && SetoresRepository.obterSetor) {
+              var setor = SetoresRepository.obterSetor(codigoSetor);
+              if (setor) {
+                  // Usar o método para obter alíquota efetiva que já considera a redução
+                  var aliquotaEfetiva = SetoresRepository.obterAliquotaEfetiva(codigoSetor);
+                  var reducaoEspecial = setor.reducaoEspecial || 0;
+
+                  // Converter para percentagem para exibição (valores internos são decimais)
+                  document.getElementById('aliquota').value = (aliquotaEfetiva * 100).toFixed(1);
+                  document.getElementById('reducao').value = (reducaoEspecial * 100).toFixed(1);
+
+                  console.log('Setor selecionado: ' + setor.nome);
+                  console.log('Alíquota Efetiva: ' + (aliquotaEfetiva * 100).toFixed(1) + '%, Redução: ' + (reducaoEspecial * 100).toFixed(1) + '%');
+              }
+          }
+      } else {
+          // Caso nenhum setor esteja selecionado, usar valores padrão
+          document.getElementById('aliquota').value = "26.5";
+          document.getElementById('reducao').value = "0.0";
+      }
+  }
+
+	// Adicionar evento de mudança ao select
+	document.addEventListener('DOMContentLoaded', function() {
+		// Configurar evento de mudança para o select de setores
+		var selectSetor = document.getElementById('setor');
+		if (selectSetor) {
+			selectSetor.addEventListener('change', setorSelecionado);
+		}
+		
+		// Executar uma vez para configurar os valores iniciais
+		setorSelecionado();
+	});
+	</script>
+	<script>
+	document.addEventListener('DOMContentLoaded', function() {
+		// Financial Cycle Calculation
+		function calcularCicloFinanceiro() {
+			const pmr = parseInt(document.getElementById('pmr')?.value) || 0;
+			const pmp = parseInt(document.getElementById('pmp')?.value) || 0;
+			const pme = parseInt(document.getElementById('pme')?.value) || 0;
+			
+			const ciclo = pmr + pme - pmp;
+			const campoCiclo = document.getElementById('ciclo-financeiro');
+			if (campoCiclo) {
+				campoCiclo.value = ciclo;
+			}
+		}
+		
+		['pmr', 'pmp', 'pme'].forEach(id => {
+			const campo = document.getElementById(id);
+			if (campo) {
+				campo.addEventListener('input', calcularCicloFinanceiro);
+			}
+		});
+		
+		calcularCicloFinanceiro();
+		
+		// Credit Sales Percentage Update
+		function atualizarPercPrazo() {
+			const campoPercVista = document.getElementById('perc-vista');
+			const campoPercPrazo = document.getElementById('perc-prazo');
+			
+			if (campoPercVista && campoPercPrazo) {
+				const valorPercVista = parseFloat(campoPercVista.value) || 0;
+				const valorPercPrazo = Math.max(0, Math.min(100, 100 - valorPercVista));
+				
+				campoPercPrazo.value = valorPercPrazo.toFixed(1) + '%';
+			}
+		}
+		
+		const campoPercVista = document.getElementById('perc-vista');
+		if (campoPercVista) {
+			campoPercVista.addEventListener('input', atualizarPercPrazo);
+			campoPercVista.addEventListener('blur', atualizarPercPrazo);
+		}
+		
+		atualizarPercPrazo();
+	});
+	</script>
+	
+	<!-- Adicionar manualmente no HTML usando Inspect Element ou Console do navegador -->
+	<script>
+	(function() {
+		// Função para verificar e criar elementos ausentes
+		function verificarECriarElementos() {
+			const containerGraficos = document.querySelector('.group-box .chart-container').parentNode;
+			if (!containerGraficos) return;
+			
+			// Transformar em grid se ainda não for
+			containerGraficos.className = 'charts-grid';
+			
+			// Verificar elementos de gráficos
+			const graficos = [
+				'grafico-fluxo-caixa',
+				'grafico-capital-giro',
+				'grafico-projecao',
+				'grafico-decomposicao',
+				'grafico-sensibilidade'
+			];
+			
+			graficos.forEach(id => {
+				if (!document.getElementById(id)) {
+					const container = document.createElement('div');
+					container.className = 'chart-container';
+					
+					const canvas = document.createElement('canvas');
+					canvas.id = id;
+					
+					container.appendChild(canvas);
+					containerGraficos.appendChild(container);
+					
+					console.log(`Elemento criado: ${id}`);
+				}
+			});
+		}
+		
+		// Adicionar CSS crítico
+		function adicionarCSS() {
+			const style = document.createElement('style');
+			style.textContent = `
+				.charts-grid {
+					display: grid;
+					grid-template-columns: repeat(2, 1fr);
+					gap: 20px;
+				}
+				
+				.chart-container {
+					min-height: 250px;
+					position: relative;
+				}
+				
+				.result-card {
+					background-color: #fff;
+					padding: 15px;
+					border-radius: 5px;
+					box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+					margin-bottom: 20px;
+				}
+				
+				.action-buttons-container {
+					display: flex;
+					gap: 15px;
+					margin-top: 20px;
+					margin-bottom: 30px;
+				}
+				
+				.btn-primary {
+					background-color: #0056b3;
+					color: white;
+					border: none;
+					border-radius: 4px;
+					padding: 10px 20px;
+					cursor: pointer;
+				}
+				
+				.btn-secondary {
+					background-color: #6c757d;
+					color: white;
+					border: none;
+					border-radius: 4px;
+					padding: 10px 20px;
+					cursor: pointer;
+				}
+				
+				.alert {
+					padding: 15px;
+					border-radius: 4px;
+					margin-bottom: 20px;
+				}
+				
+				.alert-warning {
+					background-color: #fff3cd;
+					border: 1px solid #ffeeba;
+					color: #856404;
+				}
+			`;
+			document.head.appendChild(style);
+		}
+		
+		// Executar quando o DOM estiver pronto
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', function() {
+				verificarECriarElementos();
+				adicionarCSS();
+			});
+		} else {
+			verificarECriarElementos();
+			adicionarCSS();
+		}
+	})();
+	</script>
+</body>
+</html>

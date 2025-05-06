@@ -1,0 +1,201 @@
+.form-group {
+    margin-bottom: 15px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: var(--dark-text);
+}
+
+input, select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--light-border);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+input[type="number"] {
+    text-align: right;
+}
+
+.form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.form-column {
+    flex: 1;
+    min-width: 200px;
+}
+
+.input-group {
+    display: flex;
+    align-items: center;
+}
+
+.input-group-append {
+    background-color: #f8f9fa;
+    border: 1px solid var(--light-border);
+    border-left: none;
+    padding: 5px 10px;
+    border-radius: 0 4px 4px 0;
+}
+
+.input-group input {
+    border-radius: 4px 0 0 4px;
+}
+
+.radio-group {
+    display: flex;
+    gap: 15px;
+}
+
+.radio-item {
+    display: flex;
+    align-items: center;
+}
+
+.radio-item input[type="radio"] {
+    width: auto;
+    margin-right: 5px;
+}
+
+/* Campos somente leitura */
+input[readonly] {
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+}
+
+/* Tooltip para ajuda nos campos */
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+.tooltip .tooltip-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: #555;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.tooltip:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Botão de ajuda nos campos */
+.btn-help {
+    background: none;
+    border: none;
+    color: var(--primary-color);
+    cursor: help;
+    font-size: 18px;
+    padding: 0 5px;
+}
+
+/* Adicionar ao final do arquivo forms.css */
+
+.btn-secondary {
+    background-color: #f8f9fa;
+    color: #3a3a3a;
+    border: 1px solid #dee2e6;
+}
+
+.btn-secondary:hover {
+    background-color: #e9ecef;
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin: 15px 0;
+}
+
+/* Estilos para tabelas de entrada de dados */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.data-table th, .data-table td {
+    padding: 10px;
+    text-align: left;
+    border: 1px solid #dee2e6;
+}
+
+.data-table th {
+    background-color: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.data-table tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+}
+
+.action-buttons button {
+    padding: 5px 8px;
+    font-size: 12px;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.action-buttons .edit-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+}
+
+.action-buttons .delete-btn {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+}
+
+/* MODIFICAÇÕES ADICIONADAS - Início */
+.table-container {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+}
+
+.cronograma-table {
+    width: 100%;
+}
+
+textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 80px;
+    padding: 10px;
+    border: 1px solid var(--light-border);
+    border-radius: 4px;
+}
+/* MODIFICAÇÕES ADICIONADAS - Fim */
