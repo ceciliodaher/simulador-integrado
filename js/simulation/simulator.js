@@ -133,6 +133,241 @@ const SimuladorFluxoCaixa = {
             parametrosSimulacao: SimuladorRepository.obterSecao('parametrosSimulacao'),
             setoresEspeciais: SimuladorRepository.obterSecao('setoresEspeciais')
         };
+    },       
+    
+    // Adicionar função auxiliar simplificada para extração de valores
+    // No arquivo simulator.js, substituir a função extrairValorNumericoDeElemento por:
+    extrairValorNumericoDeElemento: function(id) {
+        const elemento = document.getElementById(id);
+        if (!elemento) return 0;
+
+        console.log(`Extraindo valor do campo ${id}`);
+
+        // Verificar se o elemento tem o atributo data-value (comum para formatadores de moeda)
+        if (elemento.dataset.value !== undefined) {
+            const valor = parseFloat(elemento.dataset.value);
+            console.log(`Valor obtido do data-value: ${valor}`);
+            return isNaN(valor) ? 0 : Math.abs(valor);
+        }
+
+        // Verificar se o elemento tem o atributo data-raw-value
+        if (elemento.dataset.rawValue !== undefined) {
+            const valor = parseFloat(elemento.dataset.rawValue);
+            console.log(`Valor obtido do data-raw-value: ${valor}`);
+            return isNaN(valor) ? 0 : Math.abs(valor);
+        }
+
+        // Verificar se o campo foi inicializado pelo CurrencyFormatter
+        if (elemento.dataset.currencyInitialized === 'true') {
+            // Aqui precisamos entender como o CurrencyFormatter armazena o valor real
+            // Se o CurrencyFormatter armazena os valores em centavos internamente:
+            let valorBruto = elemento.value.replace(/\D/g, '');
+            let valorEmReais = parseInt(valorBruto, 10) / 100;
+            console.log(`Valor obtido do campo formatado (centavos): ${valorEmReais}`);
+            return valorEmReais;
+        }
+
+        // Fallback: tentar extrair valor diretamente
+        const valorDireto = parseFloat(elemento.value.replace(/[^\d,.-]/g, '').replace(',', '.'));
+        console.log(`Valor obtido diretamente: ${valorDireto}`);
+        return isNaN(valorDireto) ? 0 : Math.abs(valorDireto);
+    },
+    
+    // Adicionar logo após a função extrairValorNumericoDeElemento
+    garantirValorValido: function(valor, valorMinimo = 0.01) {
+        // Garante que o valor seja um número válido, positivo e pelo menos igual ao mínimo
+        if (typeof valor !== 'number' || isNaN(valor)) {
+            return valorMinimo;
+        }
+        return Math.max(valor, valorMinimo);
+    },
+    
+     // Adicionar esta nova função para obter dados diretamente do formulário
+    obterDadosConsolidados: function() {
+        // Obter valores do formulário
+        const empresa = {
+            faturamento: this.garantirValorValido(this.extrairValorNumericoDeElemento('faturamento'), 1000),
+            margem: parseFloat(document.getElementById('margem').value) || 0,
+            setor: document.getElementById('setor').value,
+            tipoEmpresa: document.getElementById('tipo-empresa').value,
+            regime: document.getElementById('regime').value
+        };
+
+        const cicloFinanceiro = {
+            pmr: parseInt(document.getElementById('pmr').value) || 0,
+            pmp: parseInt(document.getElementById('pmp').value) || 0,
+            pme: parseInt(document.getElementById('pme').value) || 0,
+            percVista: parseFloat(document.getElementById('perc-vista').value) || 0,
+            percPrazo: 100 - (parseFloat(document.getElementById('perc-vista').value) || 0)
+        };
+
+        const parametrosFiscais = this.obterParametrosFiscais();
+
+        const parametrosSimulacao = {
+            cenario: document.getElementById('cenario').value || 'moderado',
+            taxaCrescimento: this.obterTaxaCrescimento(),
+            dataInicial: document.getElementById('data-inicial').value || '2026-01-01',
+            dataFinal: document.getElementById('data-final').value || '2033-12-31'
+        };
+
+        const parametrosFinanceiros = {
+            taxaCapitalGiro: 2.1, // Valor padrão, pode ser ajustado
+            taxaAntecipacao: 1.8  // Valor padrão, pode ser ajustado
+        };
+
+        return {
+            empresa,
+            cicloFinanceiro,
+            parametrosFiscais,
+            parametrosSimulacao,
+            parametrosFinanceiros
+        };
+    },
+
+    // Função para obter taxa de crescimento com base no cenário
+    obterTaxaCrescimento: function() {
+        const cenario = document.getElementById('cenario').value;
+
+        if (cenario === 'conservador') {
+            return 2.0;
+        } else if (cenario === 'moderado') {
+            return 5.0;
+        } else if (cenario === 'otimista') {
+            return 8.0;
+        } else if (cenario === 'personalizado') {
+            return parseFloat(document.getElementById('taxa-crescimento').value) || 5.0;
+        }
+
+        return 5.0; // Valor padrão (moderado)
+    },
+
+    // Função para obter parâmetros fiscais com base no regime
+    obterParametrosFiscais: function() {
+        const regime = document.getElementById('regime').value;
+        const tipoEmpresa = document.getElementById('tipo-empresa').value;
+
+        let parametros = {
+            aliquota: 0,
+            creditos: 0,
+            tipoOperacao: document.getElementById('tipo-operacao').value,
+            regime: ''
+        };
+
+        if (regime === 'simples') {
+            parametros.aliquota = parseFloat(document.getElementById('aliquota-simples').value) || 0;
+            parametros.regime = 'cumulativo';
+        } else {
+            // Lucro Presumido ou Real
+            parametros.regime = document.getElementById('pis-cofins-regime').value;
+
+            // Calcular alíquota total
+            let aliquotaTotal = 0;
+
+            // PIS/COFINS
+            if (parametros.regime === 'cumulativo') {
+                aliquotaTotal += 3.65; // 0.65% (PIS) + 3% (COFINS)
+            } else {
+                aliquotaTotal += 9.25; // 1.65% (PIS) + 7.6% (COFINS)
+            }
+
+            // ICMS (para empresas comerciais/industriais)
+            if (tipoEmpresa === 'comercio' || tipoEmpresa === 'industria') {
+                let aliquotaICMS = parseFloat(document.getElementById('aliquota-icms').value) || 0;
+
+                // Aplicar incentivo fiscal se existir
+                if (document.getElementById('possui-incentivo-icms').checked) {
+                    const incentivo = parseFloat(document.getElementById('incentivo-icms').value) || 0;
+                    aliquotaICMS = aliquotaICMS * (1 - (incentivo / 100));
+                }
+
+                aliquotaTotal += aliquotaICMS;
+
+                // IPI (apenas para indústria)
+                if (tipoEmpresa === 'industria') {
+                    aliquotaTotal += parseFloat(document.getElementById('aliquota-ipi').value) || 0;
+                }
+            }
+
+            // ISS (para empresas de serviços)
+            if (tipoEmpresa === 'servicos') {
+                aliquotaTotal += parseFloat(document.getElementById('aliquota-iss').value) || 0;
+            }
+
+            parametros.aliquota = aliquotaTotal;
+
+            // Adicionar créditos
+            parametros.creditosPIS = this.calcularCreditoPIS();
+            parametros.creditosCOFINS = this.calcularCreditoCOFINS();
+            parametros.creditosICMS = this.calcularCreditoICMS();
+            parametros.creditosIPI = this.calcularCreditoIPI();
+        }
+
+        return parametros;
+    },
+
+    // Funções auxiliares para cálculo de créditos
+    calcularCreditoPIS: function() {
+        if (document.getElementById('pis-cofins-regime').value === 'cumulativo') {
+            return 0;
+        }
+
+        const faturamento = this.extrairValorNumericoDeElemento('faturamento');
+        const baseCalc = parseFloat(document.getElementById('pis-cofins-base-calc').value) / 100 || 0;
+        const percCredito = parseFloat(document.getElementById('pis-cofins-perc-credito').value) / 100 || 0;
+        const aliquotaPIS = parseFloat(document.getElementById('pis-aliquota').value) / 100 || 0;
+
+        return faturamento * baseCalc * aliquotaPIS * percCredito;
+    },
+
+    calcularCreditoCOFINS: function() {
+        if (document.getElementById('pis-cofins-regime').value === 'cumulativo') {
+            return 0;
+        }
+
+        const faturamento = this.extrairValorNumericoDeElemento('faturamento');
+        const baseCalc = parseFloat(document.getElementById('pis-cofins-base-calc').value) / 100 || 0;
+        const percCredito = parseFloat(document.getElementById('pis-cofins-perc-credito').value) / 100 || 0;
+        const aliquotaCOFINS = parseFloat(document.getElementById('cofins-aliquota').value) / 100 || 0;
+
+        return faturamento * baseCalc * aliquotaCOFINS * percCredito;
+    },
+
+    calcularCreditoICMS: function() {
+        const faturamento = this.extrairValorNumericoDeElemento('faturamento');
+        const baseCalc = parseFloat(document.getElementById('icms-base-calc').value) / 100 || 0;
+        const percCredito = parseFloat(document.getElementById('icms-perc-credito').value) / 100 || 0;
+        const aliquotaICMS = parseFloat(document.getElementById('aliquota-icms').value) / 100 || 0;
+
+        return faturamento * baseCalc * aliquotaICMS * percCredito;
+    },
+
+    calcularCreditoIPI: function() {
+        const faturamento = this.extrairValorNumericoDeElemento('faturamento');
+        const baseCalc = parseFloat(document.getElementById('ipi-base-calc').value) / 100 || 0;
+        const percCredito = parseFloat(document.getElementById('ipi-perc-credito').value) / 100 || 0;
+        const aliquotaIPI = parseFloat(document.getElementById('aliquota-ipi').value) / 100 || 0;
+
+        return faturamento * baseCalc * aliquotaIPI * percCredito;
+    },
+
+    // Função para gerar um impacto base de fallback quando ocorrem erros
+    gerarImpactoBaseFallback: function(dados) {
+        const faturamento = parseFloat(dados.faturamento) || 0;
+        const aliquota = parseFloat(dados.aliquota) || 0.265;
+
+        return {
+            diferencaCapitalGiro: -faturamento * aliquota * 0.5,
+            percentualImpacto: -50,
+            necesidadeAdicionalCapitalGiro: faturamento * aliquota * 0.6,
+            impactoDiasFaturamento: 15,
+            impactoMargem: 2.5,
+            resultadoAtual: {
+                capitalGiroDisponivel: faturamento * aliquota
+            },
+            resultadoSplitPayment: {
+                capitalGiroDisponivel: faturamento * aliquota * 0.5
+            }
+        };
     },
     
     /**
@@ -142,13 +377,19 @@ const SimuladorFluxoCaixa = {
      * @throws {Error} - Erro descritivo se os dados forem inválidos
      */
     validarDados: function(dados) {
-        // Verificações fundamentais
         if (!dados) {
             throw new Error('Dados não fornecidos');
         }
 
-        // Verificar faturamento
-        if (!dados.faturamento || isNaN(dados.faturamento) || dados.faturamento <= 0) {
+        console.log("Validando faturamento:", dados.faturamento, typeof dados.faturamento);
+
+        // Garantir que o faturamento seja um número válido
+        if (typeof dados.faturamento !== 'number') {
+            dados.faturamento = parseFloat(dados.faturamento) || 0;
+        }
+
+        // Verificar faturamento com tolerância para valores muito pequenos
+        if (isNaN(dados.faturamento) || dados.faturamento <= 0) {
             throw new Error('Faturamento inválido. Deve ser um número positivo');
         }
 
@@ -174,17 +415,25 @@ const SimuladorFluxoCaixa = {
      * Simula o impacto do Split Payment
      * @returns {Object} Resultados da simulação
      */
+    // simulator.js - linha ~109 (função simular)
     simular: function() {
         console.log('Iniciando simulação...');
 
         try {
-            // Obter dados consolidados do repositório
-            const dados = this.obterDadosDoRepositorio();
+            // Obter dados consolidados do formulário (não apenas do repositório)
+            const dados = this.obterDadosConsolidados();
             console.log('Dados obtidos:', dados);
 
+            // Verificação de depuração do faturamento
+            console.log('Faturamento bruto:', document.getElementById('faturamento').value);
+            console.log('Faturamento processado:', dados.faturamento, typeof dados.faturamento);
+
             if (!dados) {
-                throw new Error('Não foi possível obter dados do repositório');
+                throw new Error('Não foi possível obter dados');
             }
+
+            // Validar dados antes de prosseguir
+            this.validarDados(dados);
 
             // Extrair ano inicial e final para simulação
             const anoInicial = parseInt(dados.parametrosSimulacao.dataInicial?.split('-')[0]) || 2026;
@@ -192,50 +441,48 @@ const SimuladorFluxoCaixa = {
 
             // Consolidar dados para simulação
             const dadosSimulacao = {
-                faturamento: dados.empresa.faturamento,
-                margem: dados.empresa.margem,
+                faturamento: parseFloat(dados.empresa.faturamento) || 0,
+                margem: parseFloat(dados.empresa.margem) / 100 || 0,
                 setor: dados.empresa.setor,
                 regime: dados.empresa.regime,
-                pmr: dados.cicloFinanceiro.pmr,
-                pmp: dados.cicloFinanceiro.pmp,
-                pme: dados.cicloFinanceiro.pme,
-                percVista: dados.cicloFinanceiro.percVista,
-                percPrazo: dados.cicloFinanceiro.percPrazo,
-                aliquota: dados.parametrosFiscais.aliquota,
+                pmr: parseInt(dados.cicloFinanceiro.pmr) || 0,
+                pmp: parseInt(dados.cicloFinanceiro.pmp) || 0,
+                pme: parseInt(dados.cicloFinanceiro.pme) || 0,
+                percVista: parseFloat(dados.cicloFinanceiro.percVista) / 100 || 0,
+                percPrazo: parseFloat(dados.cicloFinanceiro.percPrazo) / 100 || 0,
+                aliquota: parseFloat(dados.parametrosFiscais.aliquota) / 100 || 0,
                 tipoOperacao: dados.parametrosFiscais.tipoOperacao,
-                creditos: dados.parametrosFiscais.creditos,
+                creditos: parseFloat(dados.parametrosFiscais.creditos) || 0,
                 cenario: dados.parametrosSimulacao.cenario,
-                taxaCrescimento: dados.parametrosSimulacao.taxaCrescimento,
-                taxaCapitalGiro: dados.parametrosFinanceiros?.taxaCapitalGiro || 0.021,
+                taxaCrescimento: parseFloat(dados.parametrosSimulacao.taxaCrescimento) / 100 || 0.05,
+                taxaCapitalGiro: parseFloat(dados.parametrosFinanceiros?.taxaCapitalGiro) / 100 || 0.021,
                 // Adicionar os parâmetros de impostos
                 serviceCompany: dados.empresa.tipoEmpresa === 'servicos',
                 cumulativeRegime: dados.parametrosFiscais.regime === 'cumulativo',
-                creditosPIS: dados.parametrosFiscais.creditosPIS || 0,
-                creditosCOFINS: dados.parametrosFiscais.creditosCOFINS || 0,
-                creditosICMS: dados.parametrosFiscais.creditosICMS || 0,
-                creditosIPI: dados.parametrosFiscais.creditosIPI || 0,
-                creditosCBS: dados.parametrosFiscais.creditosCBS || 0,
-                creditosIBS: dados.parametrosFiscais.creditosIBS || 0
+                creditosPIS: parseFloat(dados.parametrosFiscais.creditosPIS) || 0,
+                creditosCOFINS: parseFloat(dados.parametrosFiscais.creditosCOFINS) || 0,
+                creditosICMS: parseFloat(dados.parametrosFiscais.creditosICMS) || 0,
+                creditosIPI: parseFloat(dados.parametrosFiscais.creditosIPI) || 0,
+                creditosCBS: parseFloat(dados.parametrosFiscais.creditosCBS) || 0,
+                creditosIBS: parseFloat(dados.parametrosFiscais.creditosIBS) || 0
             };
+
+            console.log('Dados de simulação consolidados:', dadosSimulacao);
+
+            // Calcular impacto inicial
+            let impactoBase = null;
+            try {
+                impactoBase = window.IVADualSystem.calcularImpactoCapitalGiro(dadosSimulacao, anoInicial);
+                console.log('Impacto base calculado:', impactoBase);
+            } catch (erroImpacto) {
+                console.error('Erro ao calcular impacto base:', erroImpacto);
+                // Criar um resultado de fallback
+                impactoBase = this.gerarImpactoBaseFallback(dadosSimulacao);
+            }
 
             // Obter parâmetros setoriais, se aplicável
             const parametrosSetoriais = dados.empresa.setor && dados.setoresEspeciais ? 
                 dados.setoresEspeciais[dados.empresa.setor] : null;
-
-            // Calcular impacto inicial de maneira segura
-            let impactoBase = null;
-            try {
-                impactoBase = window.IVADualSystem.calcularImpactoCapitalGiro(dadosSimulacao, anoInicial, parametrosSetoriais);
-            } catch (erroImpacto) {
-                console.error('Erro ao calcular impacto base:', erroImpacto);
-                impactoBase = {
-                    diferencaCapitalGiro: -dadosSimulacao.faturamento * dadosSimulacao.aliquota * 0.5,
-                    percentualImpacto: -50,
-                    necesidadeAdicionalCapitalGiro: dadosSimulacao.faturamento * dadosSimulacao.aliquota * 0.6,
-                    impactoDiasFaturamento: 15,
-                    impactoMargem: 2.5
-                };
-            }
 
             // Simular período de transição de maneira segura
             let projecaoTemporal = null;
@@ -292,6 +539,22 @@ const SimuladorFluxoCaixa = {
             };
 
             console.log('Simulação concluída com sucesso');
+            
+            // Atualizar interface imediatamente após a simulação
+            if (typeof window.atualizarInterface === 'function') {
+                window.atualizarInterface(resultados);
+            } else {
+                console.error('Função atualizarInterface não encontrada');
+            }
+
+            // Renderizar gráficos
+            if (typeof window.ChartManager !== 'undefined' && 
+                typeof window.ChartManager.renderizarGraficos === 'function') {
+                window.ChartManager.renderizarGraficos(resultados);
+            } else {
+                console.error('ChartManager não encontrado ou função renderizarGraficos não disponível');
+            }
+            
             return resultados;
         } catch (erro) {
             console.error('Erro durante a simulação:', erro);

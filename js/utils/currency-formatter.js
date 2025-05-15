@@ -83,12 +83,30 @@ const CurrencyFormatter = {
             // Se não houver valor, deixar vazio
             if (!valor) {
                 this.value = '';
+                this.dataset.rawValue = '0';
                 return;
             }
+            
+            // Calcular e armazenar o valor numérico
+            const valorNumerico = parseFloat(valor) / 100;
+            this.dataset.rawValue = valorNumerico.toString();
             
             // Formatar e atualizar o campo
             this.value = CurrencyFormatter.formatarValorMonetario(valor);
         });
+        
+        // Formatar valor inicial e armazenar valor bruto
+        if (campo.value) {
+            let valor = this.extrairNumeros(campo.value);
+            if (valor) {
+                const valorNumerico = parseFloat(valor) / 100;
+                campo.dataset.rawValue = valorNumerico.toString();
+                campo.value = this.formatarValorMonetario(valor);
+            } else {
+                campo.value = '';
+                campo.dataset.rawValue = '0';
+            }
+        }
         
         // Selecionar todo o conteúdo ao focar
         campo.addEventListener('focus', function() {

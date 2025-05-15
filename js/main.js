@@ -191,20 +191,93 @@ function inicializarEventosPrincipais() {
     }
     
     // Função para atualizar exibição da memória de cálculo
+    // Adicionar ao main.js
     function atualizarExibicaoMemoriaCalculo() {
         const selectAno = document.getElementById('select-ano-memoria');
         if (!selectAno) return;
-        
+
         const anoSelecionado = selectAno.value;
         console.log('Atualizando memória para o ano:', anoSelecionado);
-        
-        if (window.SimuladorFluxoCaixa && window.memoriaCalculoSimulacao) {
-            window.SimuladorFluxoCaixa.exibirMemoriaCalculo(anoSelecionado);
-        } else {
-            console.error('Não há memória de cálculo disponível ou o simulador não está inicializado');
-            document.getElementById('memoria-calculo').innerHTML = '<p>Realize uma simulação antes de visualizar a memória de cálculo.</p>';
+
+        // Verificar se temos dados de memória de cálculo disponíveis
+        if (!window.memoriaCalculoSimulacao) {
+            const conteudo = '<p class="text-muted">Realize uma simulação para gerar a memória de cálculo detalhada.</p>';
+            document.getElementById('memoria-calculo').innerHTML = conteudo;
+            return;
         }
+
+        // Extrair dados de memória
+        const memoria = window.memoriaCalculoSimulacao;
+
+        // Gerar conteúdo HTML para a memória de cálculo
+        let conteudo = `
+            <div class="memory-section">
+                <h3>1. Dados de Entrada</h3>
+                <div class="memory-content">
+                    <p><strong>Empresa:</strong> ${memoria.dadosEntrada?.empresa?.faturamento ? formatarMoeda(memoria.dadosEntrada.empresa.faturamento) : 'N/A'}</p>
+                    <p><strong>Margem:</strong> ${memoria.dadosEntrada?.empresa?.margem ? (memoria.dadosEntrada.empresa.margem * 100).toFixed(2) + '%' : 'N/A'}</p>
+                    <p><strong>Ciclo Financeiro:</strong> PMR = ${memoria.dadosEntrada?.cicloFinanceiro?.pmr || 'N/A'}, 
+                       PMP = ${memoria.dadosEntrada?.cicloFinanceiro?.pmp || 'N/A'}, 
+                       PME = ${memoria.dadosEntrada?.cicloFinanceiro?.pme || 'N/A'}</p>
+                    <p><strong>Distribuição de Vendas:</strong> À Vista = ${memoria.dadosEntrada?.cicloFinanceiro?.percVista ? (memoria.dadosEntrada.cicloFinanceiro.percVista * 100).toFixed(2) + '%' : 'N/A'}, 
+                       A Prazo = ${memoria.dadosEntrada?.cicloFinanceiro?.percPrazo ? (memoria.dadosEntrada.cicloFinanceiro.percPrazo * 100).toFixed(2) + '%' : 'N/A'}</p>
+                    <p><strong>Alíquota:</strong> ${memoria.dadosEntrada?.parametrosFiscais?.aliquota ? (memoria.dadosEntrada.parametrosFiscais.aliquota * 100).toFixed(2) + '%' : 'N/A'}</p>
+                </div>
+            </div>
+
+            <div class="memory-section">
+                <h3>2. Cálculo do Impacto Base</h3>
+                <div class="memory-content">
+                    <p><strong>Diferença no Capital de Giro:</strong> ${memoria.impactoBase?.diferencaCapitalGiro ? formatarMoeda(memoria.impactoBase.diferencaCapitalGiro) : 'N/A'}</p>
+                    <p><strong>Percentual de Impacto:</strong> ${memoria.impactoBase?.percentualImpacto ? memoria.impactoBase.percentualImpacto.toFixed(2) + '%' : 'N/A'}</p>
+                    <p><strong>Impacto em Dias de Faturamento:</strong> ${memoria.impactoBase?.impactoDiasFaturamento ? memoria.impactoBase.impactoDiasFaturamento.toFixed(1) + ' dias' : 'N/A'}</p>
+                </div>
+            </div>
+
+            <div class="memory-section">
+                <h3>3. Projeção Temporal</h3>
+                <div class="memory-content">
+                    <p><strong>Cenário:</strong> ${memoria.projecaoTemporal?.parametros?.cenarioTaxaCrescimento || 'N/A'}</p>
+                    <p><strong>Taxa de Crescimento:</strong> ${memoria.projecaoTemporal?.parametros?.taxaCrescimento ? (memoria.projecaoTemporal.parametros.taxaCrescimento * 100).toFixed(2) + '% a.a.' : 'N/A'}</p>
+                    <p><strong>Necessidade Total de Capital de Giro:</strong> ${memoria.projecaoTemporal?.impactoAcumulado?.totalNecessidadeCapitalGiro ? formatarMoeda(memoria.projecaoTemporal.impactoAcumulado.totalNecessidadeCapitalGiro) : 'N/A'}</p>
+                    <p><strong>Custo Financeiro Total:</strong> ${memoria.projecaoTemporal?.impactoAcumulado?.custoFinanceiroTotal ? formatarMoeda(memoria.projecaoTemporal.impactoAcumulado.custoFinanceiroTotal) : 'N/A'}</p>
+                </div>
+            </div>
+
+            <div class="memory-section">
+                <h3>4. Memória Crítica de Cálculo</h3>
+                <div class="memory-content">
+                    <p><strong>Fórmula:</strong> ${memoria.memoriaCritica?.formula || 'N/A'}</p>
+                    <div class="steps-container">
+                        <p><strong>Passo a Passo:</strong></p>
+                        <ol>
+                            ${(memoria.memoriaCritica?.passoAPasso || []).map(passo => `<li>${passo}</li>`).join('')}
+                        </ol>
+                    </div>
+                    <div class="observations-container">
+                        <p><strong>Observações:</strong></p>
+                        <ul>
+                            ${(memoria.memoriaCritica?.observacoes || []).map(obs => `<li>${obs}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Adicionar o conteúdo à div de memória de cálculo
+        document.getElementById('memoria-calculo').innerHTML = conteudo;
     }
+
+    // Função auxiliar para formatação de valores monetários
+    function formatarMoeda(valor) {
+        if (valor === undefined || valor === null || isNaN(valor)) {
+            return 'R$ 0,00';
+        }
+        return 'R$ ' + parseFloat(valor).toFixed(2).replace('.', ',');
+    }
+
+    // Exportar a função para o escopo global
+    window.exibirMemoriaCalculo = atualizarExibicaoMemoriaCalculo;
     
     // Evento para simulação de estratégias
      const btnSimularEstrategias = document.getElementById('btn-simular-estrategias');
@@ -242,6 +315,7 @@ function inicializarEventosPrincipais() {
 
 // Função para atualizar a interface com os resultados
 // Substituir ou adicionar esta função
+// main.js - substituir a função atualizarInterface
 function atualizarInterface(resultado) {
     console.log('Atualizando interface com resultados completos:', resultado);
     
@@ -253,123 +327,66 @@ function atualizarInterface(resultado) {
     }
     
     try {
-        // 1. Atualizar elementos principais de impacto
-        const formatterMoeda = (valor) => {
-            return typeof window.FormatacaoHelper !== 'undefined' && 
-                   typeof window.FormatacaoHelper.formatarMoeda === 'function' 
-                   ? window.FormatacaoHelper.formatarMoeda(valor) 
-                   : 'R$ ' + parseFloat(valor).toFixed(2).replace('.', ',');
+        // Garantir que a formatação esteja disponível
+        const formatarMoeda = function(valor) {
+            if (valor === undefined || valor === null || isNaN(valor)) {
+                return 'R$ 0,00';
+            }
+            return 'R$ ' + parseFloat(valor).toFixed(2).replace('.', ',');
         };
         
-        const formatterPercent = (valor) => {
-            return parseFloat(valor).toFixed(2) + '%';
+        const formatarPercentual = function(valor) {
+            if (valor === undefined || valor === null || isNaN(valor)) {
+                return '0,00%';
+            }
+            return parseFloat(valor).toFixed(2).replace('.', ',') + '%';
         };
         
-        // Elementos de impacto no capital de giro
-        if (resultado.impactoBase && resultado.impactoBase.diferencaCapitalGiro !== undefined) {
-            // Corrigido: impacto-capital-giro -> capital-giro-impacto
-            const elemImpacto = document.getElementById('capital-giro-impacto');
-            if (elemImpacto) {
-                elemImpacto.textContent = formatterMoeda(resultado.impactoBase.diferencaCapitalGiro);
-                // Adicionar classe para destacar valor negativo
-                if (resultado.impactoBase.diferencaCapitalGiro < 0) {
-                    elemImpacto.classList.add('valor-negativo');
-                } else {
-                    elemImpacto.classList.remove('valor-negativo');
-                }
-            }
-            
-            // Agora o elemento existe no HTML
-            const elemPercentual = document.getElementById('percentual-impacto');
-            if (elemPercentual && resultado.impactoBase.percentualImpacto !== undefined) {
-                elemPercentual.textContent = formatterPercent(resultado.impactoBase.percentualImpacto);
-            }
-            
-            // Corrigido: necessidade-adicional -> capital-giro-necessidade
-            const elemNecessidade = document.getElementById('capital-giro-necessidade');
-            if (elemNecessidade && resultado.impactoBase.necesidadeAdicionalCapitalGiro !== undefined) {
-                elemNecessidade.textContent = formatterMoeda(resultado.impactoBase.necesidadeAdicionalCapitalGiro);
-            }
-            
-            // Agora o elemento existe no HTML
-            const elemDiasFaturamento = document.getElementById('impacto-dias-faturamento');
-            if (elemDiasFaturamento && resultado.impactoBase.impactoDiasFaturamento !== undefined) {
-                elemDiasFaturamento.textContent = parseFloat(resultado.impactoBase.impactoDiasFaturamento).toFixed(1) + ' dias';
-            }
-            
-            // Atualizando o campo capital-giro-atual, se existir
-            const elemCapitalGiroAtual = document.getElementById('capital-giro-atual');
-            if (elemCapitalGiroAtual && resultado.resultadoAtual && resultado.resultadoAtual.capitalGiroDisponivel !== undefined) {
-                elemCapitalGiroAtual.textContent = formatterMoeda(resultado.resultadoAtual.capitalGiroDisponivel);
-            }
-            
-            // Atualizando o campo capital-giro-split, se existir
-            const elemCapitalGiroSplit = document.getElementById('capital-giro-split');
-            if (elemCapitalGiroSplit && resultado.resultadoSplitPayment && resultado.resultadoSplitPayment.capitalGiroDisponivel !== undefined) {
-                elemCapitalGiroSplit.textContent = formatterMoeda(resultado.resultadoSplitPayment.capitalGiroDisponivel);
+        // Atualizar elementos de comparação de sistemas tributários
+        document.getElementById('tributo-atual').textContent = formatarMoeda(resultado.impactoBase.resultadoAtual?.valorImpostoTotal || 0);
+        document.getElementById('tributo-dual').textContent = formatarMoeda(resultado.impactoBase.resultadoSplitPayment?.valorImpostoTotal || 0);
+        document.getElementById('tributo-diferenca').textContent = formatarMoeda(
+            (resultado.impactoBase.resultadoSplitPayment?.valorImpostoTotal || 0) - 
+            (resultado.impactoBase.resultadoAtual?.valorImpostoTotal || 0)
+        );
+        
+        // Atualizar elementos de impacto no capital de giro
+        document.getElementById('capital-giro-atual').textContent = formatarMoeda(resultado.impactoBase.resultadoAtual?.capitalGiroDisponivel || 0);
+        document.getElementById('capital-giro-split').textContent = formatarMoeda(resultado.impactoBase.resultadoSplitPayment?.capitalGiroDisponivel || 0);
+        document.getElementById('capital-giro-impacto').textContent = formatarMoeda(resultado.impactoBase.diferencaCapitalGiro || 0);
+        document.getElementById('capital-giro-necessidade').textContent = formatarMoeda(resultado.impactoBase.necesidadeAdicionalCapitalGiro || 0);
+        
+        // Adicionar classe CSS baseada no valor
+        const impactoElement = document.getElementById('capital-giro-impacto');
+        if (impactoElement) {
+            if ((resultado.impactoBase.diferencaCapitalGiro || 0) < 0) {
+                impactoElement.classList.add('valor-negativo');
+            } else {
+                impactoElement.classList.remove('valor-negativo');
             }
         }
         
-        // 2. Atualizar resultados da projeção temporal, se disponível
-        // Agora esses elementos existem no HTML
-        if (resultado.projecaoTemporal && resultado.projecaoTemporal.impactoAcumulado) {
-            const elemTotalNecessidade = document.getElementById('total-necessidade-giro');
-            if (elemTotalNecessidade && resultado.projecaoTemporal.impactoAcumulado.totalNecessidadeCapitalGiro !== undefined) {
-                elemTotalNecessidade.textContent = formatterMoeda(resultado.projecaoTemporal.impactoAcumulado.totalNecessidadeCapitalGiro);
-            }
-            
-            const elemCustoFinanceiro = document.getElementById('custo-financeiro-total');
-            if (elemCustoFinanceiro && resultado.projecaoTemporal.impactoAcumulado.custoFinanceiroTotal !== undefined) {
-                elemCustoFinanceiro.textContent = formatterMoeda(resultado.projecaoTemporal.impactoAcumulado.custoFinanceiroTotal);
-            }
-        }
+        // Atualizar elementos de impacto na margem operacional
+        document.getElementById('margem-atual').textContent = formatarPercentual(resultado.impactoBase.margemOperacionalOriginal * 100 || 0);
+        document.getElementById('margem-ajustada').textContent = formatarPercentual(resultado.impactoBase.margemOperacionalAjustada * 100 || 0);
+        document.getElementById('margem-impacto').textContent = formatarPercentual(resultado.impactoBase.impactoMargem || 0);
         
-        // 3. Atualizar a memória de cálculo, se disponível
-        if (resultado.memoriaCalculo) {
-            window.memoriaCalculoSimulacao = resultado.memoriaCalculo;
-            // Atualizar a exibição da memória, se a tab estiver visível
-            // Corrigido: tab-memoria-calculo -> memoria
-            const tabMemoria = document.getElementById('memoria');
-            if (tabMemoria && tabMemoria.classList.contains('active')) {
-                if (typeof atualizarExibicaoMemoriaCalculo === 'function') {
-                    atualizarExibicaoMemoriaCalculo();
-                }
-            }
-        }
+        // Atualizar elementos da análise de impacto detalhada
+        document.getElementById('percentual-impacto').textContent = formatarPercentual(resultado.impactoBase.percentualImpacto || 0);
+        document.getElementById('impacto-dias-faturamento').textContent = (parseFloat(resultado.impactoBase.impactoDiasFaturamento) || 0).toFixed(1) + ' dias';
         
-        // 4. Verificar se há uma div de resultados para mostrar
-        // Corrigido: resultados-simulacao -> resultados-detalhados
+        // Atualizar elementos da projeção temporal do impacto
+        document.getElementById('total-necessidade-giro').textContent = formatarMoeda(resultado.projecaoTemporal?.impactoAcumulado?.totalNecessidadeCapitalGiro || 0);
+        document.getElementById('custo-financeiro-total').textContent = formatarMoeda(resultado.projecaoTemporal?.impactoAcumulado?.custoFinanceiroTotal || 0);
+        
+        // Mostrar div de resultados detalhados
         const divResultados = document.getElementById('resultados-detalhados');
         if (divResultados) {
             divResultados.style.display = 'block';
         }
         
-        // 5. Mudar para a aba de resultados, se não estiver nela
-        //if (window.TabsManager && typeof window.TabsManager.ativarAba === 'function') {
-        //    window.TabsManager.ativarAba('resultados');
-        //} else {
-            // Alternativa: mostrar a aba manualmente
-            // Corrigido: tab-resultados -> resultados
-        //    const tabResultados = document.getElementById('resultados');
-        //    if (tabResultados) {
-                // Ocultar todas as abas primeiro
-        //        document.querySelectorAll('.tab-content').forEach(tab => {
-        //            tab.style.display = 'none';
-        //        });
-                
-                // Mostrar a aba de resultados
-        //        tabResultados.style.display = 'block';
-                
-                // Atualizar classes dos botões de aba
-        //        document.querySelectorAll('.tab-button').forEach(btn => {
-        //            btn.classList.remove('active');
-        //        });
-        //        const btnResultados = document.querySelector('[data-tab="resultados"]');
-        //        if (btnResultados) {
-        //            btnResultados.classList.add('active');
-        //        }
-        //    }
-        //}
+        // Armazenar resultados para memória de cálculo
+        window.memoriaCalculoSimulacao = resultado.memoriaCalculo;
         
         console.log('Interface atualizada com sucesso');
     } catch (erro) {
@@ -377,6 +394,9 @@ function atualizarInterface(resultado) {
         alert('Ocorreu um erro ao exibir os resultados: ' + erro.message);
     }
 }
+
+// Exportar a função para o escopo global
+window.atualizarInterface = atualizarInterface;
 
 // Adicionar após a inicialização dos módulos
 function inicializarRepository() {
@@ -413,9 +433,30 @@ function inicializarRepository() {
 }
 
 // Chamar após inicializarModulos
+// Adicionar ao main.js, após inicializarEventosPrincipais()
 document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar módulos básicos
     inicializarModulos();
     inicializarRepository();
+    
+    // Inicializar simulador
+    if (window.SimuladorFluxoCaixa && typeof window.SimuladorFluxoCaixa.init === 'function') {
+        window.SimuladorFluxoCaixa.init();
+    }
+    
+    // Inicializar eventos principais
+    inicializarEventosPrincipais();
+    
+    // Inicializar formatação de moeda
+    if (window.CurrencyFormatter && typeof window.CurrencyFormatter.inicializar === 'function') {
+        window.CurrencyFormatter.inicializar();
+    }
+    
+    // Inicializar campos específicos
+    ajustarCamposTributarios();
+    ajustarCamposOperacao();
+    calcularCreditosTributarios();
+    
     console.log('Inicialização completa');
 });
 

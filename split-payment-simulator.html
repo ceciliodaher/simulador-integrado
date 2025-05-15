@@ -1880,8 +1880,17 @@
 	(function() {
 		// Função para verificar e criar elementos ausentes
 		function verificarECriarElementos() {
-			const containerGraficos = document.querySelector('.group-box .chart-container').parentNode;
-			if (!containerGraficos) return;
+			const containerGraficos = document.querySelector('.charts-grid');
+			if (!containerGraficos) {
+				const containerResultados = document.querySelector('.simulation-results');
+				if (containerResultados) {
+					const novoContainer = document.createElement('div');
+					novoContainer.className = 'charts-grid';
+					containerResultados.appendChild(novoContainer);
+					console.log('Container de gráficos criado');
+				}
+				return;
+			}
 			
 			// Transformar em grid se ainda não for
 			containerGraficos.className = 'charts-grid';
@@ -1986,5 +1995,6 @@
 		}
 	})();
 	</script>
+
 </body>
 </html>
