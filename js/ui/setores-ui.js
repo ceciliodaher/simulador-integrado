@@ -8,150 +8,90 @@
             aliquotaEfetiva: 0.265,
             reducaoEspecial: 0.00,
             implementacaoInicial: 10,
-            cronogramaProprio: false,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 15, // dias
-            cicloOperacional: 45, // dias
-            margemLiquida: 0.06, // 6%
-            indiceSensibilidade: 'Alto'
+            cronogramaProprio: false
         },
         'industria': {
             nome: 'Indústria de Transformação',
             aliquotaEfetiva: 0.220,
             reducaoEspecial: 0.00,
             implementacaoInicial: 10,
-            cronogramaProprio: false,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 45, // dias
-            cicloOperacional: 90, // dias
-            margemLiquida: 0.12, // 12%
-            indiceSensibilidade: 'Médio-Alto'
+            cronogramaProprio: false
         },
         'servicos': {
             nome: 'Serviços Contínuos',
             aliquotaEfetiva: 0.265,
             reducaoEspecial: 0.00,
             implementacaoInicial: 10,
-            cronogramaProprio: false,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 30, // dias
-            cicloOperacional: 30, // dias
-            margemLiquida: 0.18, // 18%
-            indiceSensibilidade: 'Médio'
+            cronogramaProprio: false
         },
         'agronegocio': {
             nome: 'Agronegócio',
             aliquotaEfetiva: 0.195,
             reducaoEspecial: 0.00,
             implementacaoInicial: 5,
-            cronogramaProprio: true,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 60, // dias
-            cicloOperacional: 180, // dias
-            margemLiquida: 0.14, // 14%
-            indiceSensibilidade: 'Baixo'
+            cronogramaProprio: true
         },
         'construcao': {
             nome: 'Construção Civil',
             aliquotaEfetiva: 0.240,
             reducaoEspecial: 0.00,
             implementacaoInicial: 10,
-            cronogramaProprio: false,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 45, // dias
-            cicloOperacional: 120, // dias
-            margemLiquida: 0.10, // 10%
-            indiceSensibilidade: 'Médio-Alto'
+            cronogramaProprio: false
         },
         'tecnologia': {
             nome: 'Tecnologia',
             aliquotaEfetiva: 0.265,
             reducaoEspecial: 0.00,
             implementacaoInicial: 15,
-            cronogramaProprio: false,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 30, // dias
-            cicloOperacional: 45, // dias
-            margemLiquida: 0.20, // 20%
-            indiceSensibilidade: 'Médio-Baixo'
+            cronogramaProprio: false
         },
-
+        
         // Setores com Redução de 60% na Alíquota
         'educacao': {
             nome: 'Serviços de Educação',
             aliquotaEfetiva: 0.265,
             reducaoEspecial: 0.159,  // 60% de redução
             implementacaoInicial: 10,
-            cronogramaProprio: false,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 30, // dias
-            cicloOperacional: 30, // dias
-            margemLiquida: 0.20, // 20%
-            indiceSensibilidade: 'Baixo'
+            cronogramaProprio: false
         },
         'saude': {
             nome: 'Serviços de Saúde',
             aliquotaEfetiva: 0.265,
             reducaoEspecial: 0.159,  // 60% de redução
             implementacaoInicial: 10,
-            cronogramaProprio: false,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 45, // dias
-            cicloOperacional: 60, // dias
-            margemLiquida: 0.15, // 15%
-            indiceSensibilidade: 'Médio-Baixo'
+            cronogramaProprio: false
         },
         'dispositivos_medicos': {
             nome: 'Dispositivos Médicos',
             aliquotaEfetiva: 0.265,
             reducaoEspecial: 0.159,  // 60% de redução
             implementacaoInicial: 10,
-            cronogramaProprio: false,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 40, // dias
-            cicloOperacional: 75, // dias
-            margemLiquida: 0.16, // 16%
-            indiceSensibilidade: 'Médio-Baixo'
+            cronogramaProprio: false
         },
         'medicamentos': {
             nome: 'Medicamentos',
             aliquotaEfetiva: 0.265,
             reducaoEspecial: 0.159,  // 60% de redução
             implementacaoInicial: 5,
-            cronogramaProprio: false,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 35, // dias
-            cicloOperacional: 65, // dias
-            margemLiquida: 0.17, // 17%
-            indiceSensibilidade: 'Médio-Baixo'
+            cronogramaProprio: false
         },
         'alimentos_consumo_humano': {
             nome: 'Alimentos para Consumo Humano',
             aliquotaEfetiva: 0.265,
             reducaoEspecial: 0.159,  // 60% de redução
             implementacaoInicial: 5,
-            cronogramaProprio: false,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 20, // dias
-            cicloOperacional: 30, // dias
-            margemLiquida: 0.08, // 8%
-            indiceSensibilidade: 'Médio'
+            cronogramaProprio: false
         },
-
+        
         // Setores com Alíquota Zero
         'cesta_basica': {
             nome: 'Cesta Básica Nacional',
             aliquotaEfetiva: 0.00,
             reducaoEspecial: 1.00,
             implementacaoInicial: 0,
-            cronogramaProprio: false,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 10, // dias
-            cicloOperacional: 20, // dias
-            margemLiquida: 0.05, // 5%
-            indiceSensibilidade: 'Baixo' // Baixo devido à alíquota zero
+            cronogramaProprio: false
         },
-
+        
         // Regimes Específicos
         'combustiveis_energia': {
             nome: 'Combustíveis e Energia',
@@ -159,68 +99,16 @@
             reducaoEspecial: 0.00,
             implementacaoInicial: 10,
             cronogramaProprio: true,
-            regimeEspecifico: 'monofasico',
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 20, // dias
-            cicloOperacional: 40, // dias
-            margemLiquida: 0.09, // 9%
-            indiceSensibilidade: 'Médio-Alto'
+            regimeEspecifico: 'monofasico'
         },
         'financeiro_seguros': {
             nome: 'Financeiro e Seguros',
             aliquotaEfetiva: 0.265,
             reducaoEspecial: 0.00,
             implementacaoInicial: 10,
-            cronogramaProprio: true,
-            // Parâmetros operacionais para metodologia ampliada
-            prazoMedioRecebimento: 25, // dias
-            cicloOperacional: 30, // dias
-            margemLiquida: 0.22, // 22%
-            indiceSensibilidade: 'Médio-Baixo'
+            cronogramaProprio: true
         }
     };
-
-    /**
-     * Função para calcular o Índice de Sensibilidade Setorial
-     * IS = (AE_s × PMR)/(CO × ML × 100)
-     * @param {Object} setor - Objeto do setor
-     * @returns {number} Índice de sensibilidade calculado
-     */
-    function calcularIndiceSensibilidade(setor) {
-        const aliquotaEfetiva = setor.aliquotaEfetiva * (1 - setor.reducaoEspecial);
-        const prazoMedioRecebimento = setor.prazoMedioRecebimento;
-        const cicloOperacional = setor.cicloOperacional;
-        const margemLiquida = setor.margemLiquida;
-
-        if (cicloOperacional <= 0 || margemLiquida <= 0) {
-            return 0;
-        }
-
-        return (aliquotaEfetiva * prazoMedioRecebimento) / (cicloOperacional * margemLiquida * 100);
-    }
-
-    /**
-     * Classifica o índice de sensibilidade
-     * @param {number} indice - Valor do índice calculado
-     * @returns {string} Classificação do índice
-     */
-    function classificarIndiceSensibilidade(indice) {
-        if (indice > 0.3) return 'Alto';
-        if (indice > 0.15) return 'Médio-Alto';
-        if (indice > 0.05) return 'Médio';
-        if (indice > 0.02) return 'Médio-Baixo';
-        return 'Baixo';
-    }
-
-    // Se necessário, podemos adicionar a função para atualizar dinamicamente a classificação
-    function atualizarClassificacaoSetores() {
-        for (const codigoSetor in setoresPadrao) {
-            const setor = setoresPadrao[codigoSetor];
-            const indice = calcularIndiceSensibilidade(setor);
-            setor.indiceSensibilidadeCalculado = indice;
-            setor.classificacaoSensibilidade = classificarIndiceSensibilidade(indice);
-        }
-    }
 
     // Funções auxiliares
     function obterTodosSetores() {
@@ -496,15 +384,6 @@
                 linha.parentNode.removeChild(linha);
             }
         }
-    }
-    
-    /**
-     * Se necessário, atualizar a função de obtenção de setor para incluir os novos parâmetros
-     * @param {string} codigoSetor - Código do setor
-     * @returns {Object} Configurações completas do setor
-     */
-    function obterConfiguracoesSetorCompletas(codigoSetor) {
-        return setoresPadrao[codigoSetor] || setoresPadrao.comercio; // Default para comércio
     }
 
     // Exportar funções para o escopo global

@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="css/tabs.css">
     <link rel="stylesheet" href="css/forms.css">
     <link rel="stylesheet" href="css/charts.css">
-    <link rel="stylesheet" href="css/modals.css">
+    <link rel="stylesheet" href="css/modals.css">s
 </head>
 <body>
     <div class="container">
@@ -33,237 +33,513 @@
                 <button class="tab-button" data-tab="memoria">Memória de Cálculo</button>
                 <button class="tab-button" data-tab="ajuda">Ajuda e Documentação</button>
             </div>
-            
+		           
             <!-- Aba de Simulação -->
             <div id="simulacao" class="tab-content active">
-                <div class="grid">
-                    <!-- Painel de entrada -->
-                    <div class="panel">
-                        <!-- Seção "Dados da Empresa" modificada -->
-					<div class="group-box">
-						<h3>Dados da Empresa</h3>
-						<div class="form-group">
-							<label for="empresa">Empresa:</label>
-							<input type="text" id="empresa" placeholder="Nome da empresa">
+			<div class="simulation-container">
+				<!-- Coluna Esquerda - Formulários de Entrada -->
+				<div class="simulation-inputs">
+					<!-- Painel de entrada -->
+					<div class="panel">
+						<!-- Seção "Dados da Empresa" -->
+						<div class="group-box">
+							<h3>Dados da Empresa</h3>
+							<div class="form-group">
+								<label for="empresa">Empresa:</label>
+								<input type="text" id="empresa" placeholder="Nome da empresa">						
+								<label for="faturamento">Faturamento Mensal:</label>
+								<input type="text" id="faturamento" value="0" class="money-input">													
+								<label for="margem">Margem Operacional (%):</label>
+								<input type="number" id="margem" value="15" min="0" max="100" step="0.1">
+								<div class="form-group">
+								<label for="tipo-empresa">Tipo de Empresa:</label>
+								<select id="tipo-empresa" name="tipo-empresa">
+									<option value="">Selecione o tipo...</option>
+									<option value="comercio">Comércio</option>
+									<option value="industria">Indústria</option>
+									<option value="servicos">Serviços</option>
+								</select>
+								</div>												
+								<label for="tipo-operacao">Tipo de Operação:</label>
+								<select id="tipo-operacao" onchange="ajustarCamposOperacao()">
+									<option value="">Selecione o tipo de operação...</option>
+									<option value="b2b">B2B (Empresa-Empresa)</option>
+									<option value="b2c">B2C (Empresa-Consumidor)</option>
+									<option value="mista">Mista</option>
+								</select>
+							</div>
+						</div>				
+					
+						<div class="group-box">
+							<h3>Sistema Tributário Atual</h3>
+							<div class="form-row">
+								<div class="form-column">
+									<div class="form-group">
+										<label for="regime">Regime Tributário:</label>
+										<select id="regime" onchange="ajustarCamposTributarios()">
+											<option value="">Selecione o regime tributário...</option>
+											<option value="simples">Simples Nacional</option>
+											<option value="presumido">Lucro Presumido</option>
+											<option value="real">Lucro Real</option>
+										</select>
+									</div>														
+
+								<!-- Campos específicos para Simples Nacional -->
+								<div id="campos-simples" class="campos-regime" style="display: none;">
+									<div class="form-row">
+										<div class="form-column">
+											<div class="form-group">
+												<label for="aliquota-simples">Alíquota Simples Nacional (%):</label>
+												<input type="number" id="aliquota-simples" name="aliquota-simples" value="6.0" min="0" max="30" step="0.01">
+											</div>
+										</div>
+									</div>
+								</div>
+
+								<!-- Campos para Lucro Presumido e Real -->
+								<div id="campos-lucro" class="campos-regime" style="display: none;">
+									<!-- PIS/COFINS -->
+									<div class="form-row">
+										<div class="form-column">
+											<div class="form-group">
+												<label for="pis-cofins-regime">Regime PIS/COFINS:</label>
+												<select id="pis-cofins-regime" onchange="ajustarAliquotasPisCofins()">
+													<option value="cumulativo">Cumulativo</option>
+													<option value="nao-cumulativo">Não-Cumulativo</option>
+												</select>
+											</div>
+										</div>
+									</div>
+
+									<div id="campos-pis-cofins-creditos" style="display: none;">
+										<div class="form-row">
+											<div class="form-column">
+												<div class="form-group">
+													<label for="pis-aliquota">Alíquota PIS (%):</label>
+													<input type="number" id="pis-aliquota" value="1.65" min="0" max="10" step="0.01" readonly>
+												</div>
+											</div>
+											<div class="form-column">
+												<div class="form-group">
+													<label for="cofins-aliquota">Alíquota COFINS (%):</label>
+													<input type="number" id="cofins-aliquota" value="7.6" min="0" max="20" step="0.01" readonly>
+												</div>
+											</div>
+										</div>
+									</div>
+
+									<div class="form-row">
+										<div class="form-column">
+											<div class="form-group">
+												<label for="pis-cofins-base-calc">Base de Cálculo (% do faturamento):</label>
+												<input type="number" id="pis-cofins-base-calc" value="50" min="0" max="100" step="0.1">
+												<small class="text-muted">Percentual de aquisições com direito a crédito</small>
+											</div>
+										</div>
+										<div class="form-column">
+											<div class="form-group">
+												<label for="pis-cofins-perc-credito">Percentual de Aproveitamento (%):</label>
+												<input type="number" id="pis-cofins-perc-credito" value="100" min="0" max="100" step="0.1">
+												<small class="text-muted">Percentual efetivamente aproveitado</small>
+											</div>
+										</div>
+									</div>
+
+									<div class="form-row">
+										<div class="form-column">
+											<div class="form-group">
+												<label for="creditos-pis-cofins-calc">Créditos PIS/COFINS Calculados:</label>
+												<input type="text" id="creditos-pis-cofins-calc" class="money-input" readonly>
+												<small class="text-muted">Calculado automaticamente</small>
+											</div>
+										</div>
+									</div>
+
+									<!-- ICMS para empresas comerciais/industriais -->
+									<div id="campos-icms" class="campos-operacao">
+										<div class="form-row">
+											<div class="form-column">
+												<div class="form-group">
+													<label for="aliquota-icms">Alíquota ICMS (%):</label>
+													<input type="number" id="aliquota-icms" value="18.0" min="0" max="30" step="0.01">
+												</div>
+											</div>
+										</div>
+
+										<div class="form-row">
+											<div class="form-column">
+												<div class="form-group">
+													<label for="icms-base-calc">Base de Cálculo (% do faturamento):</label>
+													<input type="number" id="icms-base-calc" value="60" min="0" max="100" step="0.1">
+													<small class="text-muted">Percentual de aquisições com ICMS</small>
+												</div>
+											</div>
+											<div class="form-column">
+												<div class="form-group">
+													<label for="icms-perc-credito">Percentual de Aproveitamento (%):</label>
+													<input type="number" id="icms-perc-credito" value="100" min="0" max="100" step="0.1">
+													<small class="text-muted">Percentual efetivamente aproveitado</small>
+												</div>
+											</div>
+										</div>
+
+										<div class="form-row">
+											<div class="form-column">
+												<div class="form-group">
+													<label for="creditos-icms-calc">Créditos ICMS Calculados:</label>
+													<input type="text" id="creditos-icms-calc" class="money-input" readonly>
+													<small class="text-muted">Calculado automaticamente</small>
+												</div>
+											</div>
+										</div>
+
+										<div class="form-row">
+											<div class="form-column">
+												<div class="form-group checkbox-group">
+													<input type="checkbox" id="possui-incentivo-icms" onchange="toggleCamposIncentivoICMS()">
+													<label for="possui-incentivo-icms">Possui Incentivo Fiscal ICMS</label>
+												</div>
+											</div>
+											<div class="form-column" id="campo-incentivo-icms" style="display: none;">
+												<div class="form-group">
+													<label for="incentivo-icms">Redução por Incentivo (%):</label>
+													<input type="number" id="incentivo-icms" value="0" min="0" max="100" step="0.1">
+												</div>
+											</div>
+										</div>
+									</div>
+
+									<!-- IPI para empresas industriais -->
+									<div id="campos-ipi" class="campos-operacao">
+										<div class="form-row">
+											<div class="form-column">
+												<div class="form-group">
+													<label for="aliquota-ipi">Alíquota IPI (%):</label>
+													<input type="number" id="aliquota-ipi" value="10.0" min="0" max="100" step="0.01">
+												</div>
+											</div>
+										</div>
+
+										<div class="form-row">
+											<div class="form-column">
+												<div class="form-group">
+													<label for="ipi-base-calc">Base de Cálculo (% do faturamento):</label>
+													<input type="number" id="ipi-base-calc" value="40" min="0" max="100" step="0.1">
+													<small class="text-muted">Percentual de aquisições com IPI</small>
+												</div>
+											</div>
+											<div class="form-column">
+												<div class="form-group">
+													<label for="ipi-perc-credito">Percentual de Aproveitamento (%):</label>
+													<input type="number" id="ipi-perc-credito" value="100" min="0" max="100" step="0.1">
+													<small class="text-muted">Percentual efetivamente aproveitado</small>
+												</div>
+											</div>
+										</div>
+
+										<div class="form-row">
+											<div class="form-column">
+												<div class="form-group">
+													<label for="creditos-ipi-calc">Créditos IPI Calculados:</label>
+													<input type="text" id="creditos-ipi-calc" class="money-input" readonly>
+													<small class="text-muted">Calculado automaticamente</small>
+												</div>
+											</div>
+										</div>
+									</div>
+
+									<!-- ISS para empresas de serviços -->
+									<div id="campos-iss" class="campos-operacao" style="display: none;">
+										<div class="form-row">
+											<div class="form-column">
+												<div class="form-group">
+													<label for="aliquota-iss">Alíquota ISS (%):</label>
+													<input type="number" id="aliquota-iss" value="5.0" min="0" max="10" step="0.01">
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+								</div>
+							</div>
 						</div>
+
+						<div class="group-box">
+							<h3>Sistema IVA Dual e Split Payment</h3>
+							<div class="form-row">
+								<div class="form-column">
+									<div class="form-group">
+										<label for="setor">Setor de Atividade:</label>
+										<select id="setor" class="form-control">
+											<option value="">Selecione uma atividade...</option>
+											<!-- Opções preenchidas via JS -->
+										</select>
+									</div>
+									<div class="form-group">
+										<label for="aliquota-cbs">Alíquota CBS (%):</label>
+										<input type="number" id="aliquota-cbs" min="0" max="100" step="0.1" readonly>
+									</div>
+									<div class="form-group">
+										<label for="aliquota-ibs">Alíquota IBS (%):</label>
+										<input type="number" id="aliquota-ibs" min="0" max="100" step="0.1" readonly>
+									</div>
+									<div class="form-group">
+										<label for="reducao">Redução Especial (%):</label>
+										<input type="number" id="reducao" min="0" max="100" step="0.1" readonly>
+									</div>
+									<div class="form-group">
+										<label for="aliquota">Alíquota Efetiva (%):</label>
+										<input type="number" id="aliquota" min="0" max="100" step="0.1" readonly>
+									</div>
+									<div class="form-group">
+										<label for="categoria-iva">Categoria Tributária:</label>
+										<select id="categoria-iva" disabled>
+											<option value="standard">Padrão</option>
+											<option value="reduced">Reduzida</option>
+											<option value="exempt">Isenta</option>
+										</select>
+									</div>
+								</div>
+							</div>
+						</div>								
+
 						<div class="form-row">
 							<div class="form-column">
 								<div class="form-group">
-									<label for="faturamento">Faturamento Mensal:</label>
-									<input type="text" id="faturamento" value="0" class="money-input">
-								</div>
-							</div>
-							<div class="form-column">
-								<div class="form-group">
-									<label for="margem">Margem Operacional (%):</label>
-									<input type="number" id="margem" value="15" min="0" max="100" step="0.1">
-								</div>
-							</div>
-						</div>
-						<div class="form-row">
-							<div class="form-column">
-								<div class="form-group">
-									<label for="regime">Regime Tributário:</label>
-									<select id="regime">
-										<option value="">Selecione o regime tributário...</option>
-										<option value="simples">Simples Nacional</option>
-										<option value="presumido">Lucro Presumido</option>
-										<option value="real">Lucro Real</option>
+									<label for="compensacao">Compensação de Créditos:</label>
+									<select id="compensacao">
+										<option value="automatica">Automática (Tempo Real)</option>
+										<option value="mensal">Mensal</option>
+										<option value="trimestral">Trimestral</option>
 									</select>
 								</div>
 							</div>
-						</div>
-					</div>
-					<div class="form-column">
-						<div class="form-group">
-							<label for="setor">Setor de Atividade:</label>
-							<select id="setor" class="form-control">
-								<option value="">Selecione uma atividade...</option>
-								<!-- Opções serão preenchidas via SetoresRepository -->
-							</select>
-						</div>
+						</div>		
 
-						<!-- Seção "Tributação e Split Payment" modificada -->
 						<div class="group-box">
-							<h3>Tributação e Split Payment</h3>
+							<h3>Ciclo Financeiro</h3>
 							<div class="form-row">
 								<div class="form-column">
 									<div class="form-group">
-										<label for="aliquota">Alíquota Efetiva (%):</label>
-										<input type="number" id="aliquota" name="aliquota" value="26.5" min="0" max="100" step="0.1">
-										<small class="text-muted">Ajuste conforme o setor selecionado</small>
+										<label for="pmr">Prazo Médio de Recebimento (dias):</label>
+										<input type="number" id="pmr" value="30" min="0" step="1">
 									</div>
 								</div>
 								<div class="form-column">
 									<div class="form-group">
-										<label for="reducao">Redução Especial (%):</label>
-										<input type="number" id="reducao" name="reducao" value="0.0" min="0" max="100" step="0.1">
-										<small class="text-muted">Ajuste conforme o setor selecionado</small>
-									</div>
-								</div>
-							</div>
-							<div class="form-row">
-								<div class="form-column">
-									<div class="form-group">
-										<label for="tipo-operacao">Tipo de Operação:</label>
-										<select id="tipo-operacao">
-											<option value="b2b">B2B (Empresa-Empresa)</option>
-											<option value="b2c">B2C (Empresa-Consumidor)</option>
-											<option value="mista">Mista</option>
-										</select>
-									</div>
-								</div>
-								<div class="form-column">
-									<div class="form-group">
-										<label for="creditos">Créditos Tributários Mensais:</label>
-										<input type="text" id="creditos" value="0" class="money-input">
+										<label for="pmp">Prazo Médio de Pagamento (dias):</label>
+										<input type="number" id="pmp" value="30" min="0" step="1">
 									</div>
 								</div>
 							</div>
 							<div class="form-row">
 								<div class="form-column">
 									<div class="form-group">
-										<label for="compensacao">Compensação de Créditos:</label>
-										<select id="compensacao">
-											<option value="automatica">Automática (Tempo Real)</option>
-											<option value="mensal">Mensal</option>
-											<option value="trimestral">Trimestral</option>
-										</select>
+										<label for="pme">Prazo Médio de Estoque (dias):</label>
+										<input type="number" id="pme" value="30" min="0" step="1">
+									</div>
+								</div>
+								<div class="form-column">
+									<div class="form-group">
+										<label for="ciclo-financeiro">Ciclo Financeiro (dias):</label>
+										<input type="number" id="ciclo-financeiro" value="30" readonly>
+									</div>
+								</div>
+								<div class="form-column">
+									<div class="form-group checkbox-group">
+										<input type="checkbox" id="considerar-split" name="considerar-split">
+										<label for="considerar-split">Considerar Split Payment no cálculo</label>
+										<span class="tooltip">
+											<i class="info-icon">i</i>
+											<span class="tooltip-text">Ajusta o ciclo financeiro de acordo com o impacto do Split Payment, considerando o percentual de implementação do ano selecionado.</span>
+										</span>
 									</div>
 								</div>
 							</div>
-						</div>
-					<div class="group-box">
-						<h3>Ciclo Financeiro</h3>
-						<div class="form-row">
-							<div class="form-column">
-								<div class="form-group">
-									<label for="pmr">Prazo Médio de Recebimento (dias):</label>
-									<input type="number" id="pmr" value="30" min="0" step="1">
-								</div>
-							</div>
-							<div class="form-column">
-								<div class="form-group">
-									<label for="pmp">Prazo Médio de Pagamento (dias):</label>
-									<input type="number" id="pmp" value="30" min="0" step="1">
-								</div>
-							</div>
-						</div>
-						<div class="form-row">
-							<div class="form-column">
-								<div class="form-group">
-									<label for="pme">Prazo Médio de Estoque (dias):</label>
-									<input type="number" id="pme" value="30" min="0" step="1">
-								</div>
-							</div>
-							<div class="form-column">
-								<div class="form-group">
-									<label for="ciclo-financeiro">Ciclo Financeiro (dias):</label>
-									<input type="number" id="ciclo-financeiro" value="30" readonly>
-								</div>
-							</div>
-							<div class="form-column">
-								<div class="form-group checkbox-group">
-									<input type="checkbox" id="considerar-split" name="considerar-split">
-									<label for="considerar-split">Considerar Split Payment no cálculo</label>
-									<span class="tooltip">
-										<i class="info-icon">i</i>
-										<span class="tooltip-text">Ajusta o ciclo financeiro de acordo com o impacto do Split Payment, considerando o percentual de implementação do ano selecionado.</span>
-									</span>
-								</div>
-							</div>
-						</div>
-						
-						<!-- Campos opcionais para exibir a NCG (inicialmente ocultos) -->
-						<div id="campos-ncg" style="display: none;" class="form-row">
-							<div class="form-column">
-								<div class="form-group">
-									<label for="ncg-atual">NCG Atual:</label>
-									<input type="text" id="ncg-atual" readonly>
-								</div>
-							</div>
-							<div class="form-column">
-								<div class="form-group">
-									<label for="ncg-ajustada">NCG com Split Payment:</label>
-									<input type="text" id="ncg-ajustada" readonly>
-								</div>
-							</div>
-							<div class="form-column">
-								<div class="form-group">
-									<label for="diferenca-ncg">Impacto no Capital de Giro:</label>
-									<input type="text" id="diferenca-ncg" readonly class="impact-field">
-								</div>
-							</div>
-						</div>
-						<div class="form-row">
-							<div class="form-column">
-								<div class="form-group">
-									<label for="perc-vista">Percentual de Vendas à Vista (%):</label>
-									<input type="number" id="perc-vista" value="30" min="0" max="100" step="1">
-								</div>
-							</div>
-							<div class="form-column">
-								<div class="form-group">
-									<label for="perc-prazo">Percentual de Vendas a Prazo (%):</label>
-									<input type="text" id="perc-prazo" value="70%" readonly>
-								</div>
-							</div>
-						</div>
-					</div>				
 
-							<div class="group-box">
-								<h3>Parâmetros da Simulação</h3>
-								<div class="form-row">
-									<div class="form-column">
-										<div class="form-group">
-											<label for="data-inicial">Data Inicial:</label>
-											<input type="date" id="data-inicial" value="2026-01-01">
-										</div>
-									</div>
-									<div class="form-column">
-										<div class="form-group">
-											<label for="data-final">Data Final:</label>
-											<input type="date" id="data-final" value="2033-12-31">
-										</div>
+							<!-- Campos opcionais para exibir a NCG (inicialmente ocultos) -->
+							<div id="campos-ncg" style="display: none;" class="form-row">
+								<div class="form-column">
+									<div class="form-group">
+										<label for="ncg-atual">NCG Atual:</label>
+										<input type="text" id="ncg-atual" readonly>
 									</div>
 								</div>
-								<div class="form-row">
-									<div class="form-column">
-										<div class="form-group">
-											<label for="cenario">Cenário de Crescimento:</label>
-											<select id="cenario">
-												<option value="">Selecione um cenário...</option>
-												<option value="conservador">Conservador (2% a.a.)</option>
-												<option value="moderado">Moderado (5% a.a.)</option>
-												<option value="otimista">Otimista (8% a.a.)</option>
-												<option value="personalizado">Personalizado</option>
-											</select>
-										</div>
+								<div class="form-column">
+									<div class="form-group">
+										<label for="ncg-ajustada">NCG com Split Payment:</label>
+										<input type="text" id="ncg-ajustada" readonly>
 									</div>
-									<div class="form-column">
-										<div class="form-group" id="cenario-personalizado" style="display: none;">
-											<label for="taxa-crescimento">Taxa de Crescimento (% a.a.):</label>
-											<input type="number" id="taxa-crescimento" value="5" min="0" max="100" step="0.1">
-										</div>
+								</div>
+								<div class="form-column">
+									<div class="form-group">
+										<label for="diferenca-ncg">Impacto no Capital de Giro:</label>
+										<input type="text" id="diferenca-ncg" readonly class="impact-field">
+									</div>
+								</div>
+							</div>
+							<div class="form-row">
+								<div class="form-column">
+									<div class="form-group">
+										<label for="perc-vista">Percentual de Vendas à Vista (%):</label>
+										<input type="number" id="perc-vista" value="30" min="0" max="100" step="1">
+									</div>
+								</div>
+								<div class="form-column">
+									<div class="form-group">
+										<label for="perc-prazo">Percentual de Vendas a Prazo (%):</label>
+										<input type="text" id="perc-prazo" value="70%" readonly>
 									</div>
 								</div>
 							</div>
 						</div>
-                        <!-- Para estas duas linhas (adicionando um container para os botões) -->
+
+						<div class="group-box">
+							<h3>Parâmetros da Simulação</h3>
+							<div class="form-row">
+								<div class="form-column">
+									<div class="form-group">
+										<label for="data-inicial">Data Inicial:</label>
+										<input type="date" id="data-inicial" value="2026-01-01">
+									</div>
+								</div>
+								<div class="form-column">
+									<div class="form-group">
+										<label for="data-final">Data Final:</label>
+										<input type="date" id="data-final" value="2033-12-31">
+									</div>
+								</div>
+							</div>
+							<div class="form-row">
+								<div class="form-column">
+									<div class="form-group">
+										<label for="cenario">Cenário de Crescimento:</label>
+										<select id="cenario">
+											<option value="">Selecione um cenário...</option>
+											<option value="conservador">Conservador (2% a.a.)</option>
+											<option value="moderado">Moderado (5% a.a.)</option>
+											<option value="otimista">Otimista (8% a.a.)</option>
+											<option value="personalizado">Personalizado</option>
+										</select>
+									</div>
+								</div>
+								<div class="form-column">
+									<div class="form-group" id="cenario-personalizado" style="display: none;">
+										<label for="taxa-crescimento">Taxa de Crescimento (% a.a.):</label>
+										<input type="number" id="taxa-crescimento" value="5" min="0" max="100" step="0.1">
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Para estas duas linhas (adicionando um container para os botões) -->
 						<div class="button-group" style="display: flex; gap: 10px; margin-top: 20px;">
 							<button id="btn-simular" style="flex: 3; padding: 15px; font-size: 16px;">Simular Impacto no Fluxo de Caixa</button>
 							<button id="btn-limpar" style="flex: 1; padding: 15px; font-size: 16px;" class="btn-secondary">Limpar</button>
 						</div>
-                    </div>
+					</div>
+				</div>
+				
+				<!-- Coluna Direita - Resultados e Gráficos -->
+				<div class="simulation-results">
+					<!-- Painel de resultados -->
+					<div class="panel">
+						<h3>Resultados da Simulação</h3>
+						<div id="resultados">
+							<p class="text-muted">Preencha os dados e clique em "Simular" para visualizar os resultados.</p>
 
-                    <!-- Painel de resultados -->
-                    <div class="panel">
-                        <h3>Resultados da Simulação</h3>
-                        <div id="resultados">
-                            <p class="text-muted">Preencha os dados e clique em "Simular" para visualizar os resultados.</p>
-                        </div>
+							<!-- Resultados detalhados serão carregados aqui -->
+							<div id="resultados-detalhados" style="display: none;">
+								<div class="result-card">
+									<h4>Comparação de Sistemas Tributários</h4>
+									<div class="result-grid">
+										<div class="result-item">
+											<span class="label">Sistema Atual:</span>
+											<span id="tributo-atual" class="value"></span>
+										</div>
+										<div class="result-item">
+											<span class="label">Sistema IVA Dual:</span>
+											<span id="tributo-dual" class="value"></span>
+										</div>
+										<div class="result-item">
+											<span class="label">Diferença:</span>
+											<span id="tributo-diferenca" class="value"></span>
+										</div>
+									</div>
+								</div>
+															
+								<div class="result-card">
+									<h4>Impacto no Capital de Giro</h4>
+									<div class="result-grid">
+										<div class="result-item">
+											<span class="label">Regime Atual:</span>
+											<span id="capital-giro-atual" class="value"></span>
+										</div>
+										<div class="result-item">
+											<span class="label">Regime Split Payment:</span>
+											<span id="capital-giro-split" class="value"></span>
+										</div>
+										<div class="result-item">
+											<span class="label">Impacto Total:</span>
+											<span id="capital-giro-impacto" class="value impact"></span>
+										</div>
+										<div class="result-item">
+											<span class="label">Necessidade Adicional:</span>
+											<span id="capital-giro-necessidade" class="value impact"></span>
+										</div>
+									</div>
+								</div>
 
-                        <!-- Modificar a seção de gráficos na aba de simulação -->
+								<div class="result-card">
+									<h4>Impacto na Margem Operacional</h4>
+									<div class="result-grid">
+										<div class="result-item">
+											<span class="label">Margem Atual:</span>
+											<span id="margem-atual" class="value"></span>
+										</div>
+										<div class="result-item">
+											<span class="label">Margem Ajustada:</span>
+											<span id="margem-ajustada" class="value"></span>
+										</div>
+										<div class="result-item">
+											<span class="label">Impacto (p.p.):</span>
+											<span id="margem-impacto" class="value impact"></span>
+										</div>
+									</div>
+								</div>
+								
+								<!-- Adicione este código dentro da div com id "resultados-detalhados" -->
+								<div class="result-card">
+									<h4>Análise de Impacto Detalhada</h4>
+									<div class="result-grid">
+										<div class="result-item">
+											<span class="label">Percentual de Impacto:</span>
+											<span id="percentual-impacto" class="value"></span>
+										</div>
+										<div class="result-item">
+											<span class="label">Impacto em Dias de Faturamento:</span>
+											<span id="impacto-dias-faturamento" class="value"></span>
+										</div>
+									</div>
+								</div>
+
+								<div class="result-card">
+									<h4>Projeção Temporal do Impacto</h4>
+									<div class="result-grid">
+										<div class="result-item">
+											<span class="label">Necessidade Total de Capital de Giro:</span>
+											<span id="total-necessidade-giro" class="value"></span>
+										</div>
+										<div class="result-item">
+											<span class="label">Custo Financeiro Total:</span>
+											<span id="custo-financeiro-total" class="value"></span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Modificar a seção de gráficos na aba de simulação -->
 						<div class="group-box">
 							<h3>Gráficos Comparativos</h3>
 							<div class="charts-grid">
@@ -285,17 +561,19 @@
 							</div>
 						</div>
 
-                        <div class="group-box">
-                            <h3>Exportar Resultados</h3>
-                            <div class="button-group">
-                                <button id="btn-exportar-pdf">Exportar PDF</button>
-                                <button id="btn-exportar-excel">Exportar Excel</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
+						<div class="group-box">
+							<h3>Exportar Resultados</h3>
+							<div class="button-group">
+								<button id="btn-exportar-pdf">Exportar PDF</button>
+								<button id="btn-exportar-excel">Exportar Excel</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			</div>
+					
+			
             <!-- Conteúdo da aba Configurações - manter o ID original -->
 			<div id="configuracoes" class="tab-content">
 				<h2>Configurações</h2>
@@ -399,11 +677,11 @@
 				<div class="panel mb-4">
 					<h3 class="panel-title">Configurações Específicas por Setor</h3>
 					<p class="text-muted mb-3">Configure parâmetros específicos para setores que possuem tratamento diferenciado no regime do split payment.</p>
-					
+
 					<div class="table-actions">
 						<button type="button" class="btn btn-primary" id="btn-adicionar-setor">Adicionar Setor</button>
 					</div>
-					
+				
 					<div class="table-container">
 						<table class="editable-table sector-table" id="sector-table">
 							<thead>
@@ -479,10 +757,9 @@
 							</tbody>
 						</table>
 					</div>
-				</div>
-				
-				<!-- Parâmetros Financeiros -->
-				<div class="panel mb-4">
+			
+					<!-- Parâmetros Financeiros -->
+					<div class="panel mb-4">
 					<h3 class="panel-title">Parâmetros Financeiros</h3>
 					<p class="text-muted mb-3">Configure os parâmetros financeiros para cálculo do impacto do split payment no capital de giro e fluxo de caixa.</p>
 					
@@ -508,67 +785,70 @@
 							</div>
 							<small class="help-text">Taxa média para linhas de capital de giro ao mês</small>
 						</div>
-						
-						<div class="form-group">
-							<label for="spread-bancario">Spread Bancário Médio:</label>
-							<div class="input-group">
-								<input type="number" id="spread-bancario" name="spread-bancario" min="0" max="100" step="0.01" value="3.5">
-								<div class="input-group-append">
-									<span class="input-group-text">p.p.</span>
-								</div>
-							</div>
-							<small class="help-text">Spread bancário médio em pontos percentuais</small>
-						</div>
 					</div>
+						
+					<div class="form-group">
+						<label for="spread-bancario">Spread Bancário Médio:</label>
+						<div class="input-group">
+							<input type="number" id="spread-bancario" name="spread-bancario" min="0" max="100" step="0.01" value="3.5">
+							<div class="input-group-append">
+								<span class="input-group-text">p.p.</span>
+							</div>
+						</div>
+						<small class="help-text">Spread bancário médio em pontos percentuais</small>
+					</div>					
 					
 					<div class="form-group mt-3">
 						<label for="observacoes-financeiras">Observações Adicionais:</label>
 						<textarea id="observacoes-financeiras" name="observacoes-financeiras" rows="3" placeholder="Insira aqui observações adicionais sobre os parâmetros financeiros..."></textarea>
 					</div>
-				</div>
 				
-				<!-- Botões de Ação -->
-				<div class="form-actions">
-					<button type="button" class="btn btn-primary" id="btn-salvar-configuracoes">Salvar Configurações</button>
-					<button type="button" class="btn btn-secondary" id="btn-restaurar-padroes">Restaurar Padrões</button>
-				</div>
+					<!-- Botões de Ação -->
+					<div class="form-actions">
+						<button type="button" class="btn btn-primary" id="btn-salvar-configuracoes">Salvar Configurações</button>
+						<button type="button" class="btn btn-secondary" id="btn-restaurar-padroes">Restaurar Padrões</button>
+					</div>
 				
-				<!-- Modal para Configuração de Cronograma Setorial -->
-				<div class="modal-backdrop" id="modal-cronograma-setor">
-					<div class="modal">
-						<div class="modal-header">
-							<h3 class="modal-title">Cronograma Específico para Setor</h3>
-							<button type="button" class="modal-close" id="btn-fechar-modal">&times;</button>
-						</div>
-						<div class="modal-body">
-							<div class="mb-3">
-								<label for="modal-setor-nome" class="fw-bold">Setor:</label>
-								<span id="modal-setor-nome"></span>
-								<input type="hidden" id="modal-setor-id">
+					<!-- Modal para Configuração de Cronograma Setorial -->
+					<div class="modal-backdrop" id="modal-cronograma-setor">
+						<div class="modal">
+							<div class="modal-header">
+								<h3 class="modal-title">Cronograma Específico para Setor</h3>
+								<button type="button" class="modal-close" id="btn-fechar-modal">&times;</button>
 							</div>
-							
-							<div class="table-container">
-								<table class="editable-table cronograma-table" id="cronograma-setor-table">
-									<thead>
-										<tr>
-											<th>Ano</th>
-											<th>Percentual (%)</th>
-											<th>Observações</th>
-										</tr>
-									</thead>
-									<tbody>
-										<!-- Será preenchido dinamicamente por JavaScript -->
-									</tbody>
-								</table>
+							<div class="modal-body">
+								<div class="mb-3">
+									<label for="modal-setor-nome" class="fw-bold">Setor:</label>
+									<span id="modal-setor-nome"></span>
+									<input type="hidden" id="modal-setor-id">
+								</div>
+								
+								<div class="table-container">
+									<table class="editable-table cronograma-table" id="cronograma-setor-table">
+										<thead>
+											<tr>
+												<th>Ano</th>
+												<th>Percentual (%)</th>
+												<th>Observações</th>
+											</tr>
+										</thead>
+										<tbody>
+											<!-- Será preenchido dinamicamente por JavaScript -->
+										</tbody>
+									</table>
+								</div>
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="btn btn-primary" id="btn-salvar-cronograma-setor">Salvar</button>
+								<button type="button" class="btn btn-secondary" id="btn-cancelar-modal">Cancelar</button>
 							</div>
 						</div>
-						<div class="modal-footer">
-							<button type="button" class="btn btn-primary" id="btn-salvar-cronograma-setor">Salvar</button>
-							<button type="button" class="btn btn-secondary" id="btn-cancelar-modal">Cancelar</button>
-						</div>
+					</div>
+				
 					</div>
 				</div>
 			</div>
+			
 
             <!-- Aba de Estratégias de Mitigação -->
             <div id="estrategias" class="tab-content">
@@ -1046,15 +1326,18 @@
 	<script src="js/ui/modal-manager.js"></script>
 	<script src="js/ui/setores-ui.js"></script>
 
+	<!-- Módulos refatorados de cálculo -->
+	<script src="js/simulation/calculation-core.js"></script>
+	<script src="js/simulation/current-tax-system.js"></script>
+	<script src="js/simulation/iva-dual-system.js"></script>
+
 	<!-- Depois os controladores -->
 	<script src="js/ui/simulacao-controller.js"></script>
 	<script src="js/ui/memoria-controller.js"></script>
 	<script src="js/ui/estrategias-controller.js"></script>
-
-	<!-- Depois os módulos de simulação -->
-	<script src="js/simulation/calculation.js"></script>
+	
+	<!-- Módulo de simulação principal -->
 	<script src="js/simulation/simulator.js"></script>
-	<script src="js/simulation/simulador-modulo.js"></script>
 	<script src="js/simulation/strategies.js"></script>
 
 	<!-- Por último, o script principal e integração -->
@@ -1063,37 +1346,407 @@
 	
     <!-- Script direto para atualização dos campos -->
 	<script>
+		
+	let calculandoCreditos = false;
+	let calculandoAliquota = false;
+		
+	// Funções para controle de exibição dos campos
+	function ajustarCamposTributarios() {
+		const regime = document.getElementById('regime').value;
+		
+		// Esconde todos os campos de impostos
+		document.getElementById('campos-simples').style.display = 'none';
+		document.getElementById('campos-lucro').style.display = 'none';
+		
+		// Exibe campos conforme o regime
+		if (regime === 'simples') {
+			document.getElementById('campos-simples').style.display = 'block';
+		} else if (regime === 'presumido' || regime === 'real') {
+			document.getElementById('campos-lucro').style.display = 'block';
+			
+			// Ajustar regime PIS/COFINS padrão
+			const pisCofinsRegime = document.getElementById('pis-cofins-regime');
+			if (pisCofinsRegime) {
+				if (regime === 'presumido') {
+					pisCofinsRegime.value = 'cumulativo';
+				} else {
+					pisCofinsRegime.value = 'nao-cumulativo';
+				}
+				
+				// Atualizar campos de PIS/COFINS
+				ajustarAliquotasPisCofins();
+			}
+			
+			// Importante: chame ajustarCamposOperacao após mostrar campos-lucro
+			ajustarCamposOperacao();
+		}
+		
+		// Recalcular alíquota efetiva
+		calcularAliquotaEfetiva();
+	}
+
+	function ajustarCamposOperacao() {
+		const tipoOperacao = document.getElementById('tipo-operacao').value;
+		const tipoEmpresa = document.getElementById('tipo-empresa').value; // Usar o campo correto
+		
+		// Obter referências aos campos de impostos
+		const camposIcms = document.getElementById('campos-icms');
+		const camposIpi = document.getElementById('campos-ipi');
+		const camposIss = document.getElementById('campos-iss');
+		
+		console.log("Ajustando campos:", tipoOperacao, tipoEmpresa); // Debugging
+		
+		// Esconder todos os campos primeiro
+		if (camposIcms) camposIcms.style.display = 'none';
+		if (camposIpi) camposIpi.style.display = 'none';
+		if (camposIss) camposIss.style.display = 'none';
+		
+		// Verificar se tanto operação quanto empresa foram selecionados
+		if (!tipoOperacao || !tipoEmpresa) return;
+		
+		// Exibir campos baseado no tipo de empresa, independente do tipo de operação
+		if (tipoEmpresa === 'servicos') {
+			if (camposIss) camposIss.style.display = 'block';
+		} else {
+			if (camposIcms) camposIcms.style.display = 'block';
+			if (camposIpi && tipoEmpresa === 'industria') {
+				camposIpi.style.display = 'block';
+			}
+		}
+		
+		// Recalcular alíquota efetiva
+		calcularAliquotaEfetiva();
+	}
+
+	function toggleCamposIncentivoICMS() {
+		const possuiIncentivo = document.getElementById('possui-incentivo-icms').checked;
+		const campoIncentivo = document.getElementById('campo-incentivo-icms');
+		
+		campoIncentivo.style.display = possuiIncentivo ? 'block' : 'none';
+		
+		// Atualizar cálculos quando o checkbox for alterado
+		calcularAliquotaEfetiva();
+	}
+
+	// Função para ajustar os campos de PIS/COFINS com base no regime selecionado
+	function ajustarAliquotasPisCofins() {
+		const regime = document.getElementById('pis-cofins-regime').value;
+		const camposCreditosPisCofins = document.getElementById('campos-pis-cofins-creditos');
+		
+		if (regime === 'cumulativo') {
+			// No regime cumulativo, não há créditos
+			document.getElementById('pis-aliquota').value = '0.65';
+			document.getElementById('cofins-aliquota').value = '3.0';
+			camposCreditosPisCofins.style.display = 'none';
+		} else {
+			// No regime não-cumulativo, exibir campos de créditos
+			document.getElementById('pis-aliquota').value = '1.65';
+			document.getElementById('cofins-aliquota').value = '7.6';
+			camposCreditosPisCofins.style.display = 'block';
+		}
+		
+		// Recalcular os créditos
+		calcularCreditosTributarios();
+	}
+
+	// Função para calcular todos os créditos tributários
+	function calcularCreditosTributarios() {
+		// Evita recursão infinita
+		if (calculandoAliquota) {
+			return;
+		}
+
+		calculandoCreditos = true;
+		
+		// Obter o elemento do faturamento
+		const campoFaturamento = document.getElementById('faturamento');
+
+		// Extrair o valor numérico do faturamento
+		let valorFaturamento;
+		if (campoFaturamento.dataset.currencyInitialized === 'true') {
+			// Assuming currencyInitialized means it's already a clean number or handled by external lib
+			// For robustness with our new formatter, parse from "R$ 1.234,56" format
+			valorFaturamento = parseFloat(campoFaturamento.value.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+		} else {
+			// Standard parsing: remove non-digits, then treat as cents value
+			let faturamentoDigits = campoFaturamento.value.replace(/\D/g, '');
+			valorFaturamento = parseFloat(faturamentoDigits) / 100;
+		}
+		if (isNaN(valorFaturamento)) valorFaturamento = 0;
+		
+		// Criar uma função auxiliar para formatar valores numéricos
+		function formatarValorNumerico(valor) {
+			return valor.toLocaleString('pt-BR', {
+				style: 'currency',
+				currency: 'BRL',
+				minimumFractionDigits: 2,
+				maximumFractionDigits: 2
+			});
+		}
+
+		let creditosPisCofins = 0; // Declare here and initialize
+
+		// Calcular créditos de PIS/COFINS
+		if (document.getElementById('pis-cofins-regime').value === 'nao-cumulativo') {
+			const pisCofinsBaseCalc = parseFloat(document.getElementById('pis-cofins-base-calc').value) / 100 || 0;
+			const pisCofinsPercCredito = parseFloat(document.getElementById('pis-cofins-perc-credito').value) / 100 || 0;
+			const aliquotaPIS = parseFloat(document.getElementById('pis-aliquota').value) / 100 || 0;
+			const aliquotaCOFINS = parseFloat(document.getElementById('cofins-aliquota').value) / 100 || 0;
+			
+			creditosPisCofins = valorFaturamento * pisCofinsBaseCalc * (aliquotaPIS + aliquotaCOFINS) * pisCofinsPercCredito;
+
+			// Atualizar o campo de crédito PIS/COFINS
+			const campoCreditosPisCofins = document.getElementById('creditos-pis-cofins-calc');
+			campoCreditosPisCofins.value = formatarValorNumerico(creditosPisCofins);
+		} else {
+			// creditosPisCofins remains 0
+			const campoCreditosPisCofins = document.getElementById('creditos-pis-cofins-calc');
+			campoCreditosPisCofins.value = formatarValorNumerico(creditosPisCofins); // or formatarValorNumerico(0)
+		}
+
+		// Calcular créditos de ICMS
+		const icmsBaseCalc = parseFloat(document.getElementById('icms-base-calc').value) / 100 || 0;
+		const icmsPercCredito = parseFloat(document.getElementById('icms-perc-credito').value) / 100 || 0;
+		const aliquotaICMS = parseFloat(document.getElementById('aliquota-icms').value) / 100 || 0;
+
+		const creditosICMS = valorFaturamento * icmsBaseCalc * aliquotaICMS * icmsPercCredito;
+		const campoCreditosICMS = document.getElementById('creditos-icms-calc');
+		campoCreditosICMS.value = formatarValorNumerico(creditosICMS);
+
+		// Calcular créditos de IPI
+		const ipiBaseCalc = parseFloat(document.getElementById('ipi-base-calc').value) / 100 || 0;
+		const ipiPercCredito = parseFloat(document.getElementById('ipi-perc-credito').value) / 100 || 0;
+		const aliquotaIPI = parseFloat(document.getElementById('aliquota-ipi').value) / 100 || 0;
+
+		const creditosIPI = valorFaturamento * ipiBaseCalc * aliquotaIPI * ipiPercCredito;
+		const campoCreditosIPI = document.getElementById('creditos-ipi-calc');
+		campoCreditosIPI.value = formatarValorNumerico(creditosIPI);
+
+		// Calcular total de créditos
+		const creditosTotal = creditosPisCofins + creditosICMS + creditosIPI;
+
+		// Atualizar o campo de créditos totais, se existir
+		const campoCreditosTotal = document.getElementById('creditos');
+		if (campoCreditosTotal) {
+			campoCreditosTotal.value = formatarValorNumerico(creditosTotal);
+		}
+
+		// No final da função, onde há a chamada para calcularAliquotaEfetiva:
+		if (!calculandoAliquota) {
+			calcularAliquotaEfetiva();
+		}
+
+		calculandoCreditos = false;
+	}
+	
+	// Função para calcular a alíquota efetiva com base nos campos tributários
+	function calcularAliquotaEfetiva() {
+		// Evita recursão infinita
+		if (calculandoCreditos) {
+			return;
+		}
+
+		calculandoAliquota = true;
+		
+		const regime = document.getElementById('regime').value;
+		let aliquotaTotal = 0;
+		
+		// Simples Nacional
+		if (regime === 'simples') {
+			const aliquotaSimples = parseFloat(document.getElementById('aliquota-simples').value) || 0;
+			aliquotaTotal = aliquotaSimples;
+		}
+		// Lucro Presumido ou Real
+		else if (regime === 'presumido' || regime === 'real') {
+			const pisCofinsRegime = document.getElementById('pis-cofins-regime').value;
+			
+			// PIS/COFINS
+			if (pisCofinsRegime === 'cumulativo') {
+				aliquotaTotal += 3.65; // 0.65% (PIS) + 3% (COFINS)
+			} else {
+				aliquotaTotal += 9.25; // 1.65% (PIS) + 7.6% (COFINS)
+			}
+			
+			// ICMS 
+			const camposIcms = document.getElementById('campos-icms');
+			if (camposIcms.style.display !== 'none') {
+				let aliquotaICMS = parseFloat(document.getElementById('aliquota-icms').value) || 0;
+				
+				// Aplicar incentivo fiscal se existir
+				if (document.getElementById('possui-incentivo-icms').checked) {
+					const incentivo = parseFloat(document.getElementById('incentivo-icms').value) || 0;
+					aliquotaICMS = aliquotaICMS * (1 - (incentivo / 100));
+				}
+				
+				aliquotaTotal += aliquotaICMS;
+			}
+			
+			// IPI
+			const camposIpi = document.getElementById('campos-ipi');
+			if (camposIpi.style.display !== 'none') {
+				const aliquotaIPI = parseFloat(document.getElementById('aliquota-ipi').value) || 0;
+				aliquotaTotal += aliquotaIPI;
+			}
+			
+			// ISS
+			const camposIss = document.getElementById('campos-iss');
+			if (camposIss.style.display !== 'none') {
+				const aliquotaISS = parseFloat(document.getElementById('aliquota-iss').value) || 0;
+				aliquotaTotal += aliquotaISS;
+			}
+		}
+		
+		// Atualizar campo de alíquota total
+		document.getElementById('aliquota').value = aliquotaTotal.toFixed(1);
+		
+		// No final da função, onde há a chamada para calcularCreditosTributarios:
+		if (!calculandoCreditos) {
+			calcularCreditosTributarios();
+		}
+
+		calculandoAliquota = false;
+	}
+
+	/**
+	 * Formats a numeric value (in major currency units, e.g., Reais) into a BRL currency string.
+	 * Example: 1234.56 -> "R$ 1.234,56"
+	 * @param {number} valorNumerico The number to format.
+	 * @returns {string} Formatted currency string.
+	 */
+	function formatarMoedaParaExibicao(valorNumerico) {
+		if (typeof valorNumerico !== 'number' || isNaN(valorNumerico)) {
+			valorNumerico = 0;
+		}
+		return valorNumerico.toLocaleString('pt-BR', {
+			style: 'currency',
+			currency: 'BRL'
+		});
+	}
+
+	// Configurar máscaras para campos de moeda
+	document.addEventListener('DOMContentLoaded', function() {
+		// Adicionar ao evento de carregamento da página
+		const campoFaturamento = document.getElementById('faturamento');
+		if (campoFaturamento) {
+			CurrencyFormatter.aplicarFormatacaoMoeda(campoFaturamento);
+		}
+
+		const camposMoeda = document.querySelectorAll('.money-input');
+		camposMoeda.forEach(function(campo) {
+			campo.addEventListener('input', function(e) {
+				let userInput = e.target.value;
+				let digits = userInput.replace(/\D/g, ''); // Get only digits
+
+				if (digits === "") {
+					e.target.value = ""; // Keep it empty or format as "R$ 0,00" if preferred
+					// If faturamento becomes empty/zero, trigger recalculation
+					if (campo.id === 'faturamento') calcularCreditosTributarios();
+					return;
+				}
+
+				let valorEmCentavos = parseInt(digits, 10);
+				let valorEmReais = valorEmCentavos / 100;
+
+				e.target.value = formatarMoedaParaExibicao(valorEmReais);
+
+				// Trigger dependent calculations if this is the faturamento field
+				if (campo.id === 'faturamento') {
+					calcularCreditosTributarios();
+				}
+			});
+
+			// Formatação inicial (revised)
+            let initialValue = campo.value;
+            let valReais = 0;
+            let shouldFormat = false;
+
+            if (initialValue === '0') { // Handles explicit value="0" from HTML (like faturamento)
+                valReais = 0;
+                shouldFormat = true;
+            } else {
+                let initialRawDigits = initialValue.replace(/\D/g, '');
+                if (initialRawDigits !== '') { // If there are any digits
+                    valReais = parseInt(initialRawDigits, 10) / 100;
+                    shouldFormat = true;
+                } else if (initialValue !== '') { // Non-empty, but no digits (e.g. "abc" or "R$")
+                    valReais = 0; // Treat as zero
+                    shouldFormat = true;
+                }
+                // If initialValue is '', shouldFormat remains false, field stays empty.
+            }
+
+            if (shouldFormat) {
+                campo.value = formatarMoedaParaExibicao(valReais);
+            }
+		});
+		
+		// Inicializar campos conforme seleções iniciais
+		ajustarCamposTributarios();
+		ajustarCamposOperacao();
+		
+		// Configurar evento para atualização quando o setor for alterado
+		document.getElementById('setor').addEventListener('change', function() {
+			setorSelecionado(); // This function handles the IVA Dual field updates
+		});
+	});
+	
 	function setorSelecionado() {
-      // Obter o elemento select
-      var select = document.getElementById('setor');
+		const select = document.getElementById('setor');
+		if (!select) {
+			console.warn("Elemento 'setor' não encontrado no DOM");
+			return; // Sai da função se o elemento não existir
+		}
 
-      // Obter o valor (código) do setor selecionado
-      var codigoSetor = select.value;
+		const codigoSetor = select.value;
+		
+		if (codigoSetor) {
+			if (typeof SetoresRepository !== 'undefined' && SetoresRepository.obterSetor) {
+				const setor = SetoresRepository.obterSetor(codigoSetor);
+				if (setor) {
+					// Valores básicos
+					const aliquotaEfetiva = SetoresRepository.obterAliquotaEfetiva(codigoSetor);
+					const reducaoEspecial = setor.reducaoEspecial || 0;
+					
+					// Novas variáveis específicas
+					const aliquotaCbs = (setor['aliquota-cbs'] * 100).toFixed(1);
+					const aliquotaIbs = (setor['aliquota-ibs'] * 100).toFixed(1);
+					const categoriaIva = setor.categoriaIva || 'standard';
 
-      // Verificar se um setor foi selecionado
-      if (codigoSetor) {
-          // Obter dados do setor diretamente do SetoresRepository
-          if (typeof SetoresRepository !== 'undefined' && SetoresRepository.obterSetor) {
-              var setor = SetoresRepository.obterSetor(codigoSetor);
-              if (setor) {
-                  // Usar o método para obter alíquota efetiva que já considera a redução
-                  var aliquotaEfetiva = SetoresRepository.obterAliquotaEfetiva(codigoSetor);
-                  var reducaoEspecial = setor.reducaoEspecial || 0;
+					// Atualização de todos os campos
+					document.getElementById('aliquota').value = (aliquotaEfetiva * 100).toFixed(1);
+					document.getElementById('reducao').value = (reducaoEspecial * 100).toFixed(1);
+					document.getElementById('aliquota-cbs').value = aliquotaCbs;
+					document.getElementById('aliquota-ibs').value = aliquotaIbs;
+					document.getElementById('categoria-iva').value = categoriaIva;
 
-                  // Converter para percentagem para exibição (valores internos são decimais)
-                  document.getElementById('aliquota').value = (aliquotaEfetiva * 100).toFixed(1);
-                  document.getElementById('reducao').value = (reducaoEspecial * 100).toFixed(1);
-
-                  console.log('Setor selecionado: ' + setor.nome);
-                  console.log('Alíquota Efetiva: ' + (aliquotaEfetiva * 100).toFixed(1) + '%, Redução: ' + (reducaoEspecial * 100).toFixed(1) + '%');
-              }
-          }
-      } else {
-          // Caso nenhum setor esteja selecionado, usar valores padrão
-          document.getElementById('aliquota').value = "26.5";
-          document.getElementById('reducao').value = "0.0";
-      }
-  }
+					// Log detalhado para debug
+					console.log('Dados atualizados:', {
+						setor: setor.nome,
+						aliquotaEfetiva: aliquotaEfetiva,
+						cbs: aliquotaCbs,
+						ibs: aliquotaIbs,
+						categoria: categoriaIva
+					});
+				}
+			}
+		} else {
+			// Reset para valores padrão
+			const defaults = {
+				aliquota: "26.5",
+				reducao: "0.0",
+				cbs: "8.8",
+				ibs: "17.7",
+				categoria: "standard"
+			};
+			
+			Object.entries(defaults).forEach(([id, value]) => {
+				const elemento = document.getElementById(id === 'categoria' ? 'categoria-iva' : `aliquota-${id}`);
+				if (elemento) {
+					elemento.value = value;
+				}
+			});
+		}
+	}
 
 	// Adicionar evento de mudança ao select
 	document.addEventListener('DOMContentLoaded', function() {
@@ -1109,6 +1762,29 @@
 	</script>
 	<script>
 	document.addEventListener('DOMContentLoaded', function() {
+		// Adicionar event listeners para campos que afetam a exibição dos impostos
+		const camposRelevantes = ['regime', 'tipo-empresa', 'tipo-operacao'];
+		
+		camposRelevantes.forEach(function(id) {
+			const campo = document.getElementById(id);
+			if (campo) {
+				campo.addEventListener('change', function() {
+					console.log(`Campo ${id} alterado para: ${this.value}`);
+					
+					if (id === 'regime') {
+						ajustarCamposTributarios();
+					} else {
+						ajustarCamposOperacao();
+					}
+				});
+			} else {
+				console.warn(`Campo #${id} não encontrado`);
+			}
+		});
+		
+		// Inicializar campos
+		ajustarCamposTributarios();
+		
 		// Financial Cycle Calculation
 		function calcularCicloFinanceiro() {
 			const pmr = parseInt(document.getElementById('pmr')?.value) || 0;
@@ -1151,6 +1827,51 @@
 		}
 		
 		atualizarPercPrazo();
+		
+		// Adicionar listeners para campos de créditos tributários
+		const camposTributarios = [
+			'faturamento',
+			'pis-cofins-base-calc',
+			'pis-cofins-perc-credito',
+			'icms-base-calc', 
+			'icms-perc-credito',
+			'aliquota-icms',
+			'ipi-base-calc',
+			'ipi-perc-credito',
+			'aliquota-ipi'
+		];
+		
+		camposTributarios.forEach(function(id) {
+			const campo = document.getElementById(id);
+			if (campo) {
+				campo.addEventListener('input', calcularCreditosTributarios);
+				campo.addEventListener('change', calcularCreditosTributarios);
+			}
+		});
+		
+		// Configuração inicial
+		ajustarAliquotasPisCofins();
+		calcularCreditosTributarios();
+		
+		// Adicionar event listener para o tipo de empresa
+		const campoTipoEmpresa = document.getElementById('tipo-empresa');
+		if (campoTipoEmpresa) {
+			campoTipoEmpresa.addEventListener('change', function() {
+				ajustarCamposOperacao();
+			});
+		}
+		
+		// Adicionar event listener para o tipo de operação
+		const campoTipoOperacao = document.getElementById('tipo-operacao');
+		if (campoTipoOperacao) {
+			campoTipoOperacao.addEventListener('change', function() {
+				ajustarCamposOperacao();
+			});
+		}
+		
+		// Inicializar os campos
+		ajustarCamposTributarios();
+		ajustarCamposOperacao();
 	});
 	</script>
 	

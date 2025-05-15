@@ -2,6 +2,12 @@
  * Controlador da aba de Memória de Cálculo
  * Gerencia a interação do usuário com a memória de cálculo
  */
+// No início do arquivo memoria-controller.js
+let interfaceState = {
+    simulacaoRealizada: false,
+    anoSelecionado: null
+};
+
 const MemoriaCalculoController = {
     inicializar: function() {
         console.log('Inicializando controlador de Memória de Cálculo');
@@ -19,12 +25,16 @@ const MemoriaCalculoController = {
     },
     
     verificarSimulacaoRealizada: function() {
-        // Verificar se há uma simulação realizada
-        const interfaceState = SimuladorRepository.obterSecao('interfaceState');
-        if (!interfaceState.simulacaoRealizada) {
-            document.getElementById('memoria-calculo').innerHTML = 
-                '<p>Realize uma simulação para gerar a memória de cálculo detalhada.</p>';
+        // Verifica se interfaceState existe antes de usá-lo
+        if (!interfaceState) {
+            console.log('Estado da interface não inicializado, criando estado padrão');
+            interfaceState = {
+                simulacaoRealizada: false,
+                anoSelecionado: null
+            };
         }
+
+        return interfaceState.simulacaoRealizada;
     },
     
     inicializarEventos: function() {

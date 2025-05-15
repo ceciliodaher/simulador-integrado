@@ -5,7 +5,41 @@ window.SimuladorRepository = {
     
     // Estrutura de dados principal
     _dadosSimulador: {
-        // Copie a estrutura de dados do arquivo original...
+        empresa: {
+            nome: '',
+            cnpj: '',
+            setor: '',
+            regime: '',
+            tipoEmpresa: '',
+            faturamento: 0,
+            margem: 0.15
+        },
+        cicloFinanceiro: {
+            pmr: 30,
+            pmp: 30,
+            pme: 30,
+            percVista: 0.3,
+            percPrazo: 0.7
+        },
+        parametrosFiscais: {
+            aliquota: 0.265,
+            creditos: 0,
+            regime: 'lucro_real',
+            tipoOperacao: 'comercial',
+            cumulativeRegime: false,
+            serviceCompany: false,
+            possuiIncentivoICMS: false,
+            percentualIncentivoICMS: 0
+        },
+        parametrosSimulacao: {
+            dataInicial: '2026-01-01',
+            dataFinal: '2033-12-31',
+            cenario: 'moderado',
+            taxaCrescimento: 0.05
+        },
+        interfaceState: {
+            simulacaoRealizada: false
+        }
     },
     
     /**
@@ -47,8 +81,6 @@ window.SimuladorRepository = {
         }
     },
     
-    // Adicione os outros métodos aqui, adaptando para o novo formato...
-    
     /**
      * Obtém uma seção completa dos dados
      * @param {string} secao - Nome da seção a obter
@@ -58,5 +90,64 @@ window.SimuladorRepository = {
         return this._dadosSimulador[secao] || null;
     },
     
-    // Adicione os outros métodos aqui...
+    /**
+     * Atualiza uma seção completa dos dados
+     * @param {string} secao - Nome da seção a ser atualizada
+     * @param {Object} dados - Novos dados para a seção
+     */
+    atualizarSecao: function(secao, dados) {
+        // Verificar se a seção existe, caso contrário, criá-la
+        if (!this._dadosSimulador[secao]) {
+            this._dadosSimulador[secao] = {};
+        }
+        
+        // Mesclar os dados preservando a estrutura
+        this._dadosSimulador[secao] = {
+            ...this._dadosSimulador[secao],
+            ...dados
+        };
+        
+        // Salvar automaticamente depois de cada atualização
+        this.salvar();
+    },
+    
+    /**
+     * Atualiza um campo específico em uma seção
+     * @param {string} secao - Nome da seção
+     * @param {string} campo - Nome do campo 
+     * @param {*} valor - Valor a ser armazenado
+     */
+    atualizarCampo: function(secao, campo, valor) {
+        // Verificar se a seção existe, caso contrário, criá-la
+        if (!this._dadosSimulador[secao]) {
+            this._dadosSimulador[secao] = {};
+        }
+        
+        // Atualizar o campo específico
+        this._dadosSimulador[secao][campo] = valor;
+        
+        // Salvar automaticamente depois de cada atualização
+        this.salvar();
+    },
+    
+    /**
+     * Salva os dados no localStorage
+     * @returns {boolean} - Sucesso da operação
+     */
+    salvar: function() {
+        try {
+            const dadosJSON = JSON.stringify(this._dadosSimulador);
+            localStorage.setItem(this.STORAGE_KEY, dadosJSON);
+            console.log('Dados salvos com sucesso no localStorage');
+            return true;
+        } catch (error) {
+            console.error('Erro ao salvar dados no localStorage:', error);
+            return false;
+        }
+    }
 };
+
+// Inicializar o repositório quando o documento estiver carregado
+document.addEventListener('DOMContentLoaded', function() {
+    SimuladorRepository.inicializar();
+});

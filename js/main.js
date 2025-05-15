@@ -4,6 +4,47 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM carregado, SimuladorFluxoCaixa disponível?', !!window.SimuladorFluxoCaixa);
 });
 
+// Adicionar este trecho no início de main.js, antes de qualquer outro código
+function inicializarModulos() {
+    // Inicializar o CalculationCore uma única vez
+    window.CalculationCore = window.CalculationCore || {
+        formatarMoeda: function(valor) {
+            // Garantir valor numérico
+            const num = parseFloat(valor) || 0;
+            // Retornar formatado
+            return 'R$ ' + num.toFixed(2).replace('.', ',');
+        },
+        formatarValorSeguro: function(valor) {
+            const num = parseFloat(valor) || 0;
+            return 'R$ ' + num.toFixed(2).replace('.', ',');
+        },
+        calcularTempoMedioCapitalGiro: function(pmr, prazoRecolhimento, percVista, percPrazo) {
+            const tempoVista = prazoRecolhimento;
+            const tempoPrazo = Math.max(0, prazoRecolhimento - pmr);
+            return (percVista * tempoVista) + (percPrazo * tempoPrazo);
+        },
+        // Função simplificada de memória crítica
+        gerarMemoriaCritica: function(dados, resultados) {
+            return {
+                tituloRegime: "Regime Tributário",
+                descricaoRegime: "Simulação",
+                formula: "Detalhes de cálculo",
+                passoAPasso: ["Processo de cálculo executado"],
+                observacoes: []
+            };
+        }
+    };
+
+    console.log('Módulos inicializados com sucesso');
+    return true;
+}
+
+// Chamar no carregamento da página
+document.addEventListener('DOMContentLoaded', function() {
+    inicializarModulos();
+    console.log('Inicialização de módulos completa');
+});
+
 /**
  * Script principal do simulador de Split Payment
  * Inicializa todos os módulos e estabelece as relações entre eles
@@ -34,19 +75,11 @@ document.addEventListener('DOMContentLoaded', function() {
         ModalManager.inicializar();
     }
     
-    // Inicializar gerenciador de gráficos
-    if (typeof ChartsManager !== 'undefined') {
-        ChartsManager.init();
-    }
-    
     // Inicializar eventos específicos da página principal
     inicializarEventosPrincipais();
     
     // Adicionar observadores para mudanças de aba
     observarMudancasDeAba();
-    
-    // Inicializar estratégias de mitigação
-    inicializarEstrategiasMitigacao();
     
     console.log('Simulador de Split Payment inicializado com sucesso');
 });
@@ -63,15 +96,33 @@ function inicializarEventosPrincipais() {
         btnSimular.addEventListener('click', function() {
             console.log('Botão Simular clicado');
 
-            // Verificação explícita da disponibilidade
-            if (window.SimuladorFluxoCaixa && typeof window.SimuladorFluxoCaixa.simularImpacto === 'function') {
-                // Chamada explícita usando window
-                window.SimuladorFluxoCaixa.simularImpacto();
-            } else {
-                console.error('SimuladorFluxoCaixa não está definido corretamente', window.SimuladorFluxoCaixa);
-                alert('Erro ao iniciar a simulação. Verifique o console para mais detalhes.');
+            try {
+                // Verificar inicialização
+                if (!window.SimuladorFluxoCaixa) {
+                    throw new Error('Simulador não inicializado corretamente');
+                }
+
+                if (typeof window.SimuladorFluxoCaixa.simular !== 'function') {
+                    throw new Error('Função de simulação não disponível');
+                }
+
+                // Executar simulação
+                const resultado = window.SimuladorFluxoCaixa.simular();
+
+                if (!resultado) {
+                    throw new Error('A simulação não retornou resultados');
+                }
+
+                // Processar resultados
+                atualizarInterface(resultado);
+
+            } catch (erro) {
+                console.error('Erro ao executar simulação:', erro);
+                alert('Não foi possível realizar a simulação: ' + erro.message);
             }
         });
+    } else {
+        console.error('Botão Simular não encontrado no DOM');
     }
     
     // Eventos para exportação
@@ -107,7 +158,8 @@ function inicializarEventosPrincipais() {
     if (btnExportarEstrategiasPDF) {
         btnExportarEstrategiasPDF.addEventListener('click', function() {
             if (typeof ExportTools !== 'undefined') {
-                ExportTools.exportarEstrategiasParaPDF();
+                // Chamar a mesma função da aba Simulação
+                ExportTools.exportarParaPDF();
             }
         });
     }
@@ -116,7 +168,8 @@ function inicializarEventosPrincipais() {
     if (btnExportarEstrategiasExcel) {
         btnExportarEstrategiasExcel.addEventListener('click', function() {
             if (typeof ExportTools !== 'undefined') {
-                ExportTools.exportarEstrategiasParaExcel();
+                // Chamar a mesma função da aba Simulação
+                ExportTools.exportarParaExcel();
             }
         });
     }
@@ -154,10 +207,16 @@ function inicializarEventosPrincipais() {
     }
     
     // Evento para simulação de estratégias
-    const btnSimularEstrategias = document.getElementById('btn-simular-estrategias');
+     const btnSimularEstrategias = document.getElementById('btn-simular-estrategias');
     if (btnSimularEstrategias) {
         btnSimularEstrategias.addEventListener('click', function() {
-            simularEstrategias();
+            // Corrigir a referência para a função
+            if (window.SimuladorFluxoCaixa && typeof window.SimuladorFluxoCaixa.simularEstrategias === 'function') {
+                window.SimuladorFluxoCaixa.simularEstrategias();
+            } else {
+                console.error('Função de simulação de estratégias não encontrada');
+                alert('Não foi possível simular estratégias. Verifique se todos os módulos foram carregados corretamente.');
+            }
         });
     }
     
@@ -181,93 +240,184 @@ function inicializarEventosPrincipais() {
     console.log('Eventos principais inicializados');
 }
 
-/**
- * Inicialização das estratégias de mitigação
- */
-function inicializarEstrategiasMitigacao() {
-    // Verificar se a simulação já foi realizada
-    if (!window.interfaceState || !window.interfaceState.resultadosSimulacao) {
-        console.log("Simulação não realizada. Estratégias de mitigação não inicializadas.");
+// Função para atualizar a interface com os resultados
+// Substituir ou adicionar esta função
+function atualizarInterface(resultado) {
+    console.log('Atualizando interface com resultados completos:', resultado);
+    
+    // Verifica se temos resultados válidos
+    if (!resultado || !resultado.impactoBase) {
+        console.error('Resultados inválidos ou incompletos:', resultado);
+        alert('Não foi possível processar os resultados da simulação. Verifique o console para detalhes.');
         return;
     }
-
-    // Verificar se o elemento existe antes de tentar acessá-lo
-    const containerEstrategias = document.getElementById('estrategias-container');
-    if (!containerEstrategias) {
-        console.log("Elemento 'estrategias-container' não encontrado. Tentando novamente em 500ms...");
-        // Tentar novamente após um curto delay para dar tempo ao DOM de carregar
-        setTimeout(inicializarEstrategiasMitigacao, 500);
-        return;
-    }
-
-    console.log('Inicializando gerenciador de estratégias de mitigação');
     
-    // Configuração dos botões de estratégias
-    document.querySelectorAll('.strategy-tab-button').forEach(button => {
-        button.addEventListener('click', function() {
-            // Remover classe ativa de todos os botões
-            document.querySelectorAll('.strategy-tab-button').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Adicionar classe ativa ao botão clicado
-            this.classList.add('active');
-            
-            // Esconder todos os conteúdos
-            document.querySelectorAll('.strategy-tab-content').forEach(content => {
-                content.style.display = 'none';
-            });
-            
-            // Mostrar o conteúdo correspondente
-            const estrategiaId = this.getAttribute('data-strategy-tab');
-            document.getElementById('strategy-' + estrategiaId).style.display = 'block';
-        });
-    });
-    
-    // Inicializar botões de cálculo de estratégias
-    inicializarBotaoAjustePrecos();
-    inicializarBotaoRenegociacaoPrazos();
-    
-    console.log('Gerenciador de estratégias de mitigação inicializado');
-}
-
-/**
- * Inicializa o botão de ajuste de preços
- */
-function inicializarBotaoAjustePrecos() {
-    const btnAjustePrecos = document.getElementById('btn-calcular-ajuste-precos');
-    if (btnAjustePrecos) {
-        btnAjustePrecos.addEventListener('click', function() {
-            console.log('Calculando estratégia de ajuste de preços');
-            
-            // Verificar se ChartsManager está disponível
-            if (typeof ChartsManager !== 'undefined') {
-                ChartsManager.renderizarGraficoAjustePrecos();
-            } else {
-                console.error('ChartsManager não está disponível');
+    try {
+        // 1. Atualizar elementos principais de impacto
+        const formatterMoeda = (valor) => {
+            return typeof window.FormatacaoHelper !== 'undefined' && 
+                   typeof window.FormatacaoHelper.formatarMoeda === 'function' 
+                   ? window.FormatacaoHelper.formatarMoeda(valor) 
+                   : 'R$ ' + parseFloat(valor).toFixed(2).replace('.', ',');
+        };
+        
+        const formatterPercent = (valor) => {
+            return parseFloat(valor).toFixed(2) + '%';
+        };
+        
+        // Elementos de impacto no capital de giro
+        if (resultado.impactoBase && resultado.impactoBase.diferencaCapitalGiro !== undefined) {
+            // Corrigido: impacto-capital-giro -> capital-giro-impacto
+            const elemImpacto = document.getElementById('capital-giro-impacto');
+            if (elemImpacto) {
+                elemImpacto.textContent = formatterMoeda(resultado.impactoBase.diferencaCapitalGiro);
+                // Adicionar classe para destacar valor negativo
+                if (resultado.impactoBase.diferencaCapitalGiro < 0) {
+                    elemImpacto.classList.add('valor-negativo');
+                } else {
+                    elemImpacto.classList.remove('valor-negativo');
+                }
             }
-        });
+            
+            // Agora o elemento existe no HTML
+            const elemPercentual = document.getElementById('percentual-impacto');
+            if (elemPercentual && resultado.impactoBase.percentualImpacto !== undefined) {
+                elemPercentual.textContent = formatterPercent(resultado.impactoBase.percentualImpacto);
+            }
+            
+            // Corrigido: necessidade-adicional -> capital-giro-necessidade
+            const elemNecessidade = document.getElementById('capital-giro-necessidade');
+            if (elemNecessidade && resultado.impactoBase.necesidadeAdicionalCapitalGiro !== undefined) {
+                elemNecessidade.textContent = formatterMoeda(resultado.impactoBase.necesidadeAdicionalCapitalGiro);
+            }
+            
+            // Agora o elemento existe no HTML
+            const elemDiasFaturamento = document.getElementById('impacto-dias-faturamento');
+            if (elemDiasFaturamento && resultado.impactoBase.impactoDiasFaturamento !== undefined) {
+                elemDiasFaturamento.textContent = parseFloat(resultado.impactoBase.impactoDiasFaturamento).toFixed(1) + ' dias';
+            }
+            
+            // Atualizando o campo capital-giro-atual, se existir
+            const elemCapitalGiroAtual = document.getElementById('capital-giro-atual');
+            if (elemCapitalGiroAtual && resultado.resultadoAtual && resultado.resultadoAtual.capitalGiroDisponivel !== undefined) {
+                elemCapitalGiroAtual.textContent = formatterMoeda(resultado.resultadoAtual.capitalGiroDisponivel);
+            }
+            
+            // Atualizando o campo capital-giro-split, se existir
+            const elemCapitalGiroSplit = document.getElementById('capital-giro-split');
+            if (elemCapitalGiroSplit && resultado.resultadoSplitPayment && resultado.resultadoSplitPayment.capitalGiroDisponivel !== undefined) {
+                elemCapitalGiroSplit.textContent = formatterMoeda(resultado.resultadoSplitPayment.capitalGiroDisponivel);
+            }
+        }
+        
+        // 2. Atualizar resultados da projeção temporal, se disponível
+        // Agora esses elementos existem no HTML
+        if (resultado.projecaoTemporal && resultado.projecaoTemporal.impactoAcumulado) {
+            const elemTotalNecessidade = document.getElementById('total-necessidade-giro');
+            if (elemTotalNecessidade && resultado.projecaoTemporal.impactoAcumulado.totalNecessidadeCapitalGiro !== undefined) {
+                elemTotalNecessidade.textContent = formatterMoeda(resultado.projecaoTemporal.impactoAcumulado.totalNecessidadeCapitalGiro);
+            }
+            
+            const elemCustoFinanceiro = document.getElementById('custo-financeiro-total');
+            if (elemCustoFinanceiro && resultado.projecaoTemporal.impactoAcumulado.custoFinanceiroTotal !== undefined) {
+                elemCustoFinanceiro.textContent = formatterMoeda(resultado.projecaoTemporal.impactoAcumulado.custoFinanceiroTotal);
+            }
+        }
+        
+        // 3. Atualizar a memória de cálculo, se disponível
+        if (resultado.memoriaCalculo) {
+            window.memoriaCalculoSimulacao = resultado.memoriaCalculo;
+            // Atualizar a exibição da memória, se a tab estiver visível
+            // Corrigido: tab-memoria-calculo -> memoria
+            const tabMemoria = document.getElementById('memoria');
+            if (tabMemoria && tabMemoria.classList.contains('active')) {
+                if (typeof atualizarExibicaoMemoriaCalculo === 'function') {
+                    atualizarExibicaoMemoriaCalculo();
+                }
+            }
+        }
+        
+        // 4. Verificar se há uma div de resultados para mostrar
+        // Corrigido: resultados-simulacao -> resultados-detalhados
+        const divResultados = document.getElementById('resultados-detalhados');
+        if (divResultados) {
+            divResultados.style.display = 'block';
+        }
+        
+        // 5. Mudar para a aba de resultados, se não estiver nela
+        //if (window.TabsManager && typeof window.TabsManager.ativarAba === 'function') {
+        //    window.TabsManager.ativarAba('resultados');
+        //} else {
+            // Alternativa: mostrar a aba manualmente
+            // Corrigido: tab-resultados -> resultados
+        //    const tabResultados = document.getElementById('resultados');
+        //    if (tabResultados) {
+                // Ocultar todas as abas primeiro
+        //        document.querySelectorAll('.tab-content').forEach(tab => {
+        //            tab.style.display = 'none';
+        //        });
+                
+                // Mostrar a aba de resultados
+        //        tabResultados.style.display = 'block';
+                
+                // Atualizar classes dos botões de aba
+        //        document.querySelectorAll('.tab-button').forEach(btn => {
+        //            btn.classList.remove('active');
+        //        });
+        //        const btnResultados = document.querySelector('[data-tab="resultados"]');
+        //        if (btnResultados) {
+        //            btnResultados.classList.add('active');
+        //        }
+        //    }
+        //}
+        
+        console.log('Interface atualizada com sucesso');
+    } catch (erro) {
+        console.error('Erro ao atualizar interface:', erro);
+        alert('Ocorreu um erro ao exibir os resultados: ' + erro.message);
     }
 }
 
-/**
- * Inicializa o botão de renegociação de prazos
- */
-function inicializarBotaoRenegociacaoPrazos() {
-    const btnRenegociacaoPrazos = document.getElementById('btn-calcular-renegociacao-prazos');
-    if (btnRenegociacaoPrazos) {
-        btnRenegociacaoPrazos.addEventListener('click', function() {
-            console.log('Calculando estratégia de renegociação de prazos');
-            
-            // Verificar se ChartsManager está disponível
-            if (typeof ChartsManager !== 'undefined') {
-                ChartsManager.renderizarGraficoRenegociacaoPrazos();
-            } else {
-                console.error('ChartsManager não está disponível');
-            }
-        });
+// Adicionar após a inicialização dos módulos
+function inicializarRepository() {
+    // Verificar se o repository já existe
+    if (typeof SimuladorRepository !== 'undefined') {
+        return true;
     }
+
+    // Criar repository básico se não existir
+    window.SimuladorRepository = {
+        dados: {
+            empresa: { faturamento: 1000000, margem: 0.15 },
+            cicloFinanceiro: { pmr: 30, pmp: 30, pme: 30, percVista: 0.3, percPrazo: 0.7 },
+            parametrosFiscais: { aliquota: 0.265, creditos: 0 },
+            parametrosSimulacao: { 
+                cenario: 'moderado', 
+                taxaCrescimento: 0.05,
+                dataInicial: '2026-01-01',
+                dataFinal: '2033-12-31'
+            }
+        },
+
+        obterSecao: function(nome) {
+            return this.dados[nome] || {};
+        },
+
+        atualizarSecao: function(nome, dados) {
+            this.dados[nome] = dados;
+        }
+    };
+
+    console.log('Repository inicializado com sucesso');
+    return true;
 }
+
+// Chamar após inicializarModulos
+document.addEventListener('DOMContentLoaded', function() {
+    inicializarModulos();
+    inicializarRepository();
+    console.log('Inicialização completa');
+});
 
 /**
  * Observar mudanças de aba para atualizar dados quando necessário
@@ -281,14 +431,6 @@ function observarMudancasDeAba() {
         if (tabId === 'simulacao') {
             SetoresManager.preencherDropdownSetores('setor');
             console.log('Dropdown de setores atualizado na aba de simulação');
-        }
-        
-        // Se a aba de estratégias for ativada, atualizar os gráficos
-        if (tabId === 'estrategias') {
-            if (typeof ChartsManager !== 'undefined') {
-                ChartsManager.atualizarTodosGraficos();
-                console.log('Gráficos de estratégias atualizados');
-            }
         }
     });
 }

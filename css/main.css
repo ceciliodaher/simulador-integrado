@@ -310,119 +310,170 @@ button:hover {
     }
 }
 
-/* Estilos para estratégias de mitigação */
-.strategy-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    margin-bottom: 15px;
-    border-bottom: 1px solid #ddd;
-}
-
-.strategy-tab-button {
-    padding: 8px 12px;
-    margin-right: 5px;
-    margin-bottom: -1px;
-    border: 1px solid transparent;
-    border-radius: 4px 4px 0 0;
-    background-color: transparent;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.strategy-tab-button:hover {
+/* Estilos para a memória de cálculo */
+#memoria-calculo {
+    font-family: monospace;
+    white-space: pre-wrap;
     background-color: #f8f9fa;
-    border-color: #ddd #ddd transparent;
-}
-
-.strategy-tab-button.active {
-    background-color: #fff;
-    border-color: #ddd #ddd #fff;
-    font-weight: bold;
-}
-
-.strategy-tab-content {
     padding: 15px;
     border: 1px solid #ddd;
-    border-top: none;
-    border-radius: 0 0 4px 4px;
+    border-radius: 4px;
+    overflow: auto;
+    max-height: 600px;
+}
+
+#memoria-calculo h3 {
+    margin-top: 15px;
+    margin-bottom: 5px;
+    color: #0056b3;
+}
+
+#memoria-calculo table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+}
+
+#memoria-calculo th, #memoria-calculo td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+#memoria-calculo th {
+    background-color: #f2f2f2;
+}
+
+.memoria-secao {
+    margin-bottom: 15px;
+    border-bottom: 1px dotted #ccc;
+    padding-bottom: 10px;
+}
+
+.memoria-formula {
+    background-color: #eef;
+    padding: 5px;
+    border-left: 3px solid #0056b3;
+    margin: 5px 0;
+}
+
+/* Layout de duas colunas para a aba de simulação */
+.simulation-container {
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    width: 100%;
+}
+
+.simulation-inputs {
+    flex: 1;
+    max-width: 50%;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.simulation-results {
+    flex: 1;
+    max-width: 50%;
+    overflow-y: auto;
+    padding-left: 10px;
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 1200px) {
+    .simulation-container {
+        flex-direction: column;
+    }
+    
+    .simulation-inputs,
+    .simulation-results {
+        max-width: 100%;
+        padding: 0;
+    }
+}
+
+/* Ajustes nos group-box para melhor uso do espaço */
+.simulation-inputs .group-box {
+    margin-bottom: 15px;
+}
+
+.simulation-results .panel,
+.simulation-results .group-box {
     margin-bottom: 20px;
 }
 
-/* Estilos para resultados de estratégias */
-.result-section {
-    margin: 15px 0;
-    padding: 15px;
-    background-color: #f8f9fa;
-    border-radius: 4px;
-    border-left: 4px solid #4285F4;
+/* Ajustes para os gráficos */
+.simulation-results .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
 }
 
-.result-section h4 {
+/* Ajuste para largura dos campos de formulário */
+.simulation-inputs input[type="text"],
+.simulation-inputs input[type="number"],
+.simulation-inputs input[type="date"],
+.simulation-inputs select {
+    width: 100%;
+}
+
+/* Melhorando a visualização dos resultados */
+.result-card {
+    background-color: #f9f9f9;
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.result-card h4 {
     margin-top: 0;
     color: #333;
-    font-weight: bold;
-}
-
-.result-item {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 8px;
+    border-bottom: 1px solid #ddd;
     padding-bottom: 8px;
-    border-bottom: 1px solid #eee;
+    margin-bottom: 12px;
 }
 
-.result-item:last-child {
-    border-bottom: none;
-}
-
-.result-label {
+/* Estilo para os botões principais */
+.btn-primary {
+    background-color: #0056b3;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
     font-weight: 500;
-    color: #555;
+    transition: background-color 0.2s;
 }
 
-.result-value {
-    font-weight: bold;
-    color: #333;
+.btn-primary:hover {
+    background-color: #004494;
 }
 
-/* Estilos para análise avançada */
-.indice-sensibilidade {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 150px;
-    position: relative;
-}
-
-.indice-valor {
-    position: absolute;
-    font-size: 3rem;
-    font-weight: bold;
-}
-
-.indice-classificacao {
-    position: absolute;
-    bottom: 10px;
-    font-size: 1.2rem;
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
     font-weight: 500;
+    transition: background-color 0.2s;
 }
 
-.classificacao-alto {
-    color: #e74c3c;
+.btn-secondary:hover {
+    background-color: #5a6268;
 }
 
-.classificacao-medio-alto {
-    color: #e67e22;
+/* Melhoria visual para os campos de resultado */
+.impact {
+    font-weight: bold;
 }
 
-.classificacao-medio {
-    color: #f39c12;
+.impact.negative {
+    color: #dc3545;
 }
 
-.classificacao-medio-baixo {
-    color: #2ecc71;
-}
-
-.classificacao-baixo {
-    color: #27ae60;
+.impact.positive {
+    color: #28a745;
 }

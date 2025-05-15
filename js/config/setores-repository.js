@@ -6,234 +6,327 @@
 const SetoresRepository = (function() {
     // Dados dos setores - única definição em todo o sistema
     const SETORES_DATA = {
-        // Setores Gerais
-        'comercio': {
-            nome: 'Comércio Varejista',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 10,
-            cronogramaProprio: false
-        },
-        'industria': {
-            nome: 'Indústria de Transformação',
-            aliquotaEfetiva: 0.220,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 10,
-            cronogramaProprio: false
-        },
-        'servicos': {
-            nome: 'Serviços Contínuos',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 10,
-            cronogramaProprio: false
-        },
-        'agronegocio': {
-            nome: 'Agronegócio',
-            aliquotaEfetiva: 0.195,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 5,
-            cronogramaProprio: true
-        },
-        'construcao': {
-            nome: 'Construção Civil',
-            aliquotaEfetiva: 0.240,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 10,
-            cronogramaProprio: false
-        },
-        'tecnologia': {
-            nome: 'Tecnologia',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 15,
-            cronogramaProprio: false
-        },
-        
-        // Setores com Redução de 60% na Alíquota
-        'educacao': {
-            nome: 'Serviços de Educação',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 10,
-            cronogramaProprio: false
-        },
-        'saude': {
-            nome: 'Serviços de Saúde',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 10,
-            cronogramaProprio: false
-        },
-        'dispositivos_medicos': {
-            nome: 'Dispositivos Médicos',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 10,
-            cronogramaProprio: false
-        },
-        'dispositivos_acessibilidade': {
-            nome: 'Dispositivos de Acessibilidade',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 10,
-            cronogramaProprio: false
-        },
-        'medicamentos': {
-            nome: 'Medicamentos',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 5,
-            cronogramaProprio: false
-        },
-        'cuidados_menstruais': {
-            nome: 'Produtos de Cuidados Menstruais',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 5,
-            cronogramaProprio: false
-        },
-        'transporte_coletivo': {
-            nome: 'Transporte Coletivo',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 10,
-            cronogramaProprio: false
-        },
-        'alimentos_consumo_humano': {
-            nome: 'Alimentos para Consumo Humano',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 5,
-            cronogramaProprio: false
-        },
-        'higiene_limpeza': {
-            nome: 'Produtos de Higiene e Limpeza',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 10,
-            cronogramaProprio: false
-        },
-        'producoes_artisticas': {
-            nome: 'Produções Artísticas e Culturais',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 10,
-            cronogramaProprio: false
-        },
-        'insumos_agropecuarios': {
-            nome: 'Insumos Agropecuários',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 5,
-            cronogramaProprio: false
-        },
-        'seguranca_nacional': {
-            nome: 'Segurança e Soberania Nacional',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 5,
-            cronogramaProprio: false
-        },
-        
-        // Setores com Alíquota Zero
-        'cesta_basica': {
-            nome: 'Cesta Básica Nacional',
-            aliquotaEfetiva: 0.00,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 0,
-            cronogramaProprio: false
-        },
-        'alimentos_in_natura': {
-            nome: 'Produtos Hortícolas, Frutas e Ovos',
-            aliquotaEfetiva: 0.00,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 0,
-            cronogramaProprio: false
-        },
-        'educacao_prouni': {
-            nome: 'Serviços de Educação Superior - ProUni',
-            aliquotaEfetiva: 0.00,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 0,
-            cronogramaProprio: false
-        },
-        'eventos_perse': {
-            nome: 'Serviços do Setor de Eventos - PERSE',
-            aliquotaEfetiva: 0.00,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 0,
-            cronogramaProprio: true,
-            cronogramaObservacao: 'Válido até 28.02.2027'
-        },
-        'recuperacao_urbana': {
-            nome: 'Recuperação Urbana em Áreas Históricas',
-            aliquotaEfetiva: 0.00,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 0,
-            cronogramaProprio: false
-        },
-        
-        // Regimes Específicos
-        'combustiveis_energia': {
-            nome: 'Combustíveis e Energia',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 10,
-            cronogramaProprio: true,
-            regimeEspecifico: 'monofasico'
-        },
-        'financeiro_seguros': {
-            nome: 'Financeiro e Seguros',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 10,
-            cronogramaProprio: true
-        },
-        'planos_saude': {
-            nome: 'Planos e Seguros de Saúde',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.159,  // 60% de redução
-            implementacaoInicial: 10,
-            cronogramaProprio: true
-        },
-        'industria_petroleo': {
-            nome: 'Indústria de Petróleo',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 10,
-            cronogramaProprio: true,
-            cronogramaObservacao: 'Válido até 31.12.2040'
-        },
-        'bens_capital': {
-            nome: 'Bens de Capital',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 10,
-            cronogramaProprio: true,
-            cronogramaObservacao: 'Suspensão por 5 anos para compras até 31.12.2028'
-        },
-        'industria_exportacao': {
-            nome: 'Industrialização para Exportação',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 10,
-            cronogramaProprio: true
-        },
-        'lojas_francas': {
-            nome: 'Regimes Aduaneiros - Lojas Francas',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 10,
-            cronogramaProprio: true
-        },
-        'reporto': {
-            nome: 'Regime Reporto (Modernização de Portos)',
-            aliquotaEfetiva: 0.265,
-            reducaoEspecial: 0.00,
-            implementacaoInicial: 10,
-            cronogramaProprio: true
-        }
+      // Setores Gerais
+      'comercio': {
+        nome: 'Comércio Varejista',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 10,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.088,
+        'aliquota-ibs': 0.177,
+        categoriaIva: 'standard'
+      },
+      'industria': {
+        nome: 'Indústria de Transformação',
+        aliquotaEfetiva: 0.220,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 10,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.073,
+        'aliquota-ibs': 0.147,
+        categoriaIva: 'reduced'
+      },
+      'servicos': {
+        nome: 'Serviços Contínuos',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 10,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.088,
+        'aliquota-ibs': 0.177,
+        categoriaIva: 'standard'
+      },
+      'agronegocio': {
+        nome: 'Agronegócio',
+        aliquotaEfetiva: 0.195,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 5,
+        cronogramaProprio: true,
+        'aliquota-cbs': 0.065,
+        'aliquota-ibs': 0.130,
+        categoriaIva: 'reduced'
+      },
+      'construcao': {
+        nome: 'Construção Civil',
+        aliquotaEfetiva: 0.240,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 10,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.080,
+        'aliquota-ibs': 0.160,
+        categoriaIva: 'reduced'
+      },
+      'tecnologia': {
+        nome: 'Tecnologia',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 15,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.088,
+        'aliquota-ibs': 0.177,
+        categoriaIva: 'standard'
+      },
+
+      // Setores com Redução de 60% na Alíquota
+      'educacao': {
+        nome: 'Serviços de Educação',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 10,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+      'saude': {
+        nome: 'Serviços de Saúde',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 10,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+      'dispositivos_medicos': {
+        nome: 'Dispositivos Médicos',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 10,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+      'dispositivos_acessibilidade': {
+        nome: 'Dispositivos de Acessibilidade',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 10,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+      'medicamentos': {
+        nome: 'Medicamentos',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 5,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+      'cuidados_menstruais': {
+        nome: 'Produtos de Cuidados Menstruais',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 5,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+      'transporte_coletivo': {
+        nome: 'Transporte Coletivo',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 10,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+      'alimentos_consumo_humano': {
+        nome: 'Alimentos para Consumo Humano',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 5,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+      'higiene_limpeza': {
+        nome: 'Produtos de Higiene e Limpeza',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 10,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+      'producoes_artisticas': {
+        nome: 'Produções Artísticas e Culturais',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 10,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+      'insumos_agropecuarios': {
+        nome: 'Insumos Agropecuários',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 5,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+      'seguranca_nacional': {
+        nome: 'Segurança e Soberania Nacional',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 5,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+
+      // Setores com Alíquota Zero
+      'cesta_basica': {
+        nome: 'Cesta Básica Nacional',
+        aliquotaEfetiva: 0.00,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 0,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.000,
+        'aliquota-ibs': 0.000,
+        categoriaIva: 'exempt'
+      },
+      'alimentos_in_natura': {
+        nome: 'Produtos Hortícolas, Frutas e Ovos',
+        aliquotaEfetiva: 0.00,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 0,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.000,
+        'aliquota-ibs': 0.000,
+        categoriaIva: 'exempt'
+      },
+      'educacao_prouni': {
+        nome: 'Serviços de Educação Superior - ProUni',
+        aliquotaEfetiva: 0.00,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 0,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.000,
+        'aliquota-ibs': 0.000,
+        categoriaIva: 'exempt'
+      },
+      'eventos_perse': {
+        nome: 'Serviços do Setor de Eventos - PERSE',
+        aliquotaEfetiva: 0.00,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 0,
+        cronogramaProprio: true,
+        cronogramaObservacao: 'Válido até 28.02.2027',
+        'aliquota-cbs': 0.000,
+        'aliquota-ibs': 0.000,
+        categoriaIva: 'exempt'
+      },
+      'recuperacao_urbana': {
+        nome: 'Recuperação Urbana em Áreas Históricas',
+        aliquotaEfetiva: 0.00,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 0,
+        cronogramaProprio: false,
+        'aliquota-cbs': 0.000,
+        'aliquota-ibs': 0.000,
+        categoriaIva: 'exempt'
+      },
+
+      // Regimes Específicos
+      'combustiveis_energia': {
+        nome: 'Combustíveis e Energia',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 10,
+        cronogramaProprio: true,
+        regimeEspecifico: 'monofasico',
+        'aliquota-cbs': 0.088,
+        'aliquota-ibs': 0.177,
+        categoriaIva: 'standard'
+      },
+      'financeiro_seguros': {
+        nome: 'Financeiro e Seguros',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 10,
+        cronogramaProprio: true,
+        'aliquota-cbs': 0.088,
+        'aliquota-ibs': 0.177,
+        categoriaIva: 'standard'
+      },
+      'planos_saude': {
+        nome: 'Planos e Seguros de Saúde',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.159,
+        implementacaoInicial: 10,
+        cronogramaProprio: true,
+        'aliquota-cbs': 0.035,
+        'aliquota-ibs': 0.071,
+        categoriaIva: 'reduced'
+      },
+      'industria_petroleo': {
+        nome: 'Indústria de Petróleo',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 10,
+        cronogramaProprio: true,
+        cronogramaObservacao: 'Válido até 31.12.2040',
+        'aliquota-cbs': 0.088,
+        'aliquota-ibs': 0.177,
+        categoriaIva: 'standard'
+      },
+      'bens_capital': {
+        nome: 'Bens de Capital',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 10,
+        cronogramaProprio: true,
+        cronogramaObservacao: 'Suspensão por 5 anos para compras até 31.12.2028',
+        'aliquota-cbs': 0.088,
+        'aliquota-ibs': 0.177,
+        categoriaIva: 'standard'
+      },
+      'industria_exportacao': {
+        nome: 'Industrialização para Exportação',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 10,
+        cronogramaProprio: true,
+        'aliquota-cbs': 0.088,
+        'aliquota-ibs': 0.177,
+        categoriaIva: 'standard'
+      },
+      'lojas_francas': {
+        nome: 'Regimes Aduaneiros - Lojas Francas',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 10,
+        cronogramaProprio: true,
+        'aliquota-cbs': 0.088,
+        'aliquota-ibs': 0.177,
+        categoriaIva: 'standard'
+      },
+      'reporto': {
+        nome: 'Regime Reporto (Modernização de Portos)',
+        aliquotaEfetiva: 0.265,
+        reducaoEspecial: 0.00,
+        implementacaoInicial: 10,
+        cronogramaProprio: true,
+        'aliquota-cbs': 0.088,
+        'aliquota-ibs': 0.177,
+        categoriaIva: 'standard'
+      }
     };
     
     // Dados salvos pelo usuário
