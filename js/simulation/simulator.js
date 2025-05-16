@@ -139,38 +139,74 @@ const SimuladorFluxoCaixa = {
     // No arquivo simulator.js, substituir a função extrairValorNumericoDeElemento por:
     extrairValorNumericoDeElemento: function(id) {
         const elemento = document.getElementById(id);
-        if (!elemento) return 0;
+        if (!elemento) {
+            console.warn(`Elemento com id ${id} não encontrado`);
+            return 0;
+        }
 
         console.log(`Extraindo valor do campo ${id}`);
 
-        // Verificar se o elemento tem o atributo data-value (comum para formatadores de moeda)
-        if (elemento.dataset.value !== undefined) {
-            const valor = parseFloat(elemento.dataset.value);
-            console.log(`Valor obtido do data-value: ${valor}`);
-            return isNaN(valor) ? 0 : Math.abs(valor);
-        }
-
-        // Verificar se o elemento tem o atributo data-raw-value
+        // 1. Verificar dataset.rawValue (adicionado pelo CurrencyFormatter)
         if (elemento.dataset.rawValue !== undefined) {
             const valor = parseFloat(elemento.dataset.rawValue);
-            console.log(`Valor obtido do data-raw-value: ${valor}`);
-            return isNaN(valor) ? 0 : Math.abs(valor);
+            if (!isNaN(valor)) {
+                console.log(`Valor obtido do data-raw-value: ${valor}`);
+                return valor;
+            }
         }
 
-        // Verificar se o campo foi inicializado pelo CurrencyFormatter
+        // 2. Se o campo foi inicializado pelo CurrencyFormatter mas não tem dataset.rawValue
         if (elemento.dataset.currencyInitialized === 'true') {
-            // Aqui precisamos entender como o CurrencyFormatter armazena o valor real
-            // Se o CurrencyFormatter armazena os valores em centavos internamente:
-            let valorBruto = elemento.value.replace(/\D/g, '');
-            let valorEmReais = parseInt(valorBruto, 10) / 100;
-            console.log(`Valor obtido do campo formatado (centavos): ${valorEmReais}`);
-            return valorEmReais;
+            // Extrair apenas os dígitos e a vírgula decimal
+            let valorTexto = elemento.value.replace(/[^\d,]/g, '').replace(',', '.');
+            let valorNumerico = parseFloat(valorTexto);
+
+            if (!isNaN(valorNumerico)) {
+                console.log(`Valor extraído diretamente do campo formatado: ${valorNumerico}`);
+                return valorNumerico;
+            }
         }
 
-        // Fallback: tentar extrair valor diretamente
+        // 3. Tentativa final com qualquer valor
         const valorDireto = parseFloat(elemento.value.replace(/[^\d,.-]/g, '').replace(',', '.'));
-        console.log(`Valor obtido diretamente: ${valorDireto}`);
-        return isNaN(valorDireto) ? 0 : Math.abs(valorDireto);
+        console.log(`Valor obtido por extração direta: ${valorDireto}`);
+        return isNaN(valorDireto) ? 0 : valorDireto;
+    },
+    
+    criarEstruturaPlana: function(dados) {
+        // Esta função converte a estrutura aninhada em uma estrutura plana para compatibilidade
+        if (!dados) return null;
+
+        return {
+            faturamento: dados.empresa?.faturamento || 0,
+            margem: dados.empresa?.margem || 0,
+            setor: dados.empresa?.setor || '',
+            regime: dados.empresa?.regime || '',
+            tipoEmpresa: dados.empresa?.tipoEmpresa || '',
+            pmr: dados.cicloFinanceiro?.pmr || 0,
+            pmp: dados.cicloFinanceiro?.pmp || 0,
+            pme: dados.cicloFinanceiro?.pme || 0,
+            percVista: dados.cicloFinanceiro?.percVista || 0,
+            percPrazo: dados.cicloFinanceiro?.percPrazo || 0,
+            aliquota: dados.parametrosFiscais?.aliquota || 0,
+            creditos: dados.parametrosFiscais?.creditos || 0,
+            tipoOperacao: dados.parametrosFiscais?.tipoOperacao || '',
+            cenario: dados.parametrosSimulacao?.cenario || 'moderado',
+            taxaCrescimento: dados.parametrosSimulacao?.taxaCrescimento || 0.05,
+            dataInicial: dados.parametrosSimulacao?.dataInicial || '2026-01-01',
+            dataFinal: dados.parametrosSimulacao?.dataFinal || '2033-12-31',
+            taxaCapitalGiro: dados.parametrosFinanceiros?.taxaCapitalGiro || 0.021,
+            taxaAntecipacao: dados.parametrosFinanceiros?.taxaAntecipacao || 0.018,
+            // Outros campos necessários
+            serviceCompany: dados.empresa.tipoEmpresa === 'servicos',
+            cumulativeRegime: dados.parametrosFiscais.regime === 'cumulativo',
+            creditosPIS: dados.parametrosFiscais.creditosPIS || 0,
+            creditosCOFINS: dados.parametrosFiscais.creditosCOFINS || 0,
+            creditosICMS: dados.parametrosFiscais.creditosICMS || 0,
+            creditosIPI: dados.parametrosFiscais.creditosIPI || 0,
+            creditosCBS: dados.parametrosFiscais.creditosCBS || 0,
+            creditosIBS: dados.parametrosFiscais.creditosIBS || 0
+        };
     },
     
     // Adicionar logo após a função extrairValorNumericoDeElemento
@@ -184,44 +220,56 @@ const SimuladorFluxoCaixa = {
     
      // Adicionar esta nova função para obter dados diretamente do formulário
     obterDadosConsolidados: function() {
+        // Extrair faturamento primeiro para identificar problemas rapidamente
+        const faturamentoValor = this.extrairValorNumericoDeElemento('faturamento');
+        console.log("Faturamento extraído para empresa:", faturamentoValor);
+
         // Obter valores do formulário
         const empresa = {
-            faturamento: this.garantirValorValido(this.extrairValorNumericoDeElemento('faturamento'), 1000),
-            margem: parseFloat(document.getElementById('margem').value) || 0,
+            faturamento: faturamentoValor,
+            margem: parseFloat(document.getElementById('margem').value) / 100 || 0,
             setor: document.getElementById('setor').value,
             tipoEmpresa: document.getElementById('tipo-empresa').value,
             regime: document.getElementById('regime').value
         };
 
+        // Verificação de segurança
+        console.log("Empresa.faturamento após atribuição:", empresa.faturamento);
+
+        // Resto do código permanece igual
         const cicloFinanceiro = {
             pmr: parseInt(document.getElementById('pmr').value) || 0,
             pmp: parseInt(document.getElementById('pmp').value) || 0,
             pme: parseInt(document.getElementById('pme').value) || 0,
-            percVista: parseFloat(document.getElementById('perc-vista').value) || 0,
-            percPrazo: 100 - (parseFloat(document.getElementById('perc-vista').value) || 0)
+            percVista: parseFloat(document.getElementById('perc-vista').value) / 100 || 0,
+            percPrazo: (100 - (parseFloat(document.getElementById('perc-vista').value) || 0)) / 100
         };
 
         const parametrosFiscais = this.obterParametrosFiscais();
-
         const parametrosSimulacao = {
             cenario: document.getElementById('cenario').value || 'moderado',
-            taxaCrescimento: this.obterTaxaCrescimento(),
+            taxaCrescimento: this.obterTaxaCrescimento() / 100,
             dataInicial: document.getElementById('data-inicial').value || '2026-01-01',
             dataFinal: document.getElementById('data-final').value || '2033-12-31'
         };
 
         const parametrosFinanceiros = {
-            taxaCapitalGiro: 2.1, // Valor padrão, pode ser ajustado
-            taxaAntecipacao: 1.8  // Valor padrão, pode ser ajustado
+            taxaCapitalGiro: 0.021, // 2.1% a.m.
+            taxaAntecipacao: 0.018  // 1.8% a.m.
         };
 
-        return {
+        const resultado = {
             empresa,
             cicloFinanceiro,
             parametrosFiscais,
             parametrosSimulacao,
             parametrosFinanceiros
         };
+
+        // Verificação final
+        console.log("Objeto final - empresa.faturamento:", resultado.empresa.faturamento);
+
+        return resultado;
     },
 
     // Função para obter taxa de crescimento com base no cenário
@@ -252,11 +300,16 @@ const SimuladorFluxoCaixa = {
             tipoOperacao: document.getElementById('tipo-operacao').value,
             regime: ''
         };
+        
+        // antes do if (tipoEmpresa === ...)
+        let aliquotaICMS = 0;
+        let incentivoICMS = 0;
 
         if (regime === 'simples') {
-            parametros.aliquota = parseFloat(document.getElementById('aliquota-simples').value) || 0;
+            const aliqSimples = parseFloat(document.getElementById('aliquota-simples').value) || 0;
+            parametros.aliquota = aliqSimples / 100;   // converte de % para fração
             parametros.regime = 'cumulativo';
-        } else {
+          } else {
             // Lucro Presumido ou Real
             parametros.regime = document.getElementById('pis-cofins-regime').value;
 
@@ -272,12 +325,12 @@ const SimuladorFluxoCaixa = {
 
             // ICMS (para empresas comerciais/industriais)
             if (tipoEmpresa === 'comercio' || tipoEmpresa === 'industria') {
-                let aliquotaICMS = parseFloat(document.getElementById('aliquota-icms').value) || 0;
+                aliquotaICMS = parseFloat(document.getElementById('aliquota-icms').value) || 0;               
 
                 // Aplicar incentivo fiscal se existir
                 if (document.getElementById('possui-incentivo-icms').checked) {
-                    const incentivo = parseFloat(document.getElementById('incentivo-icms').value) || 0;
-                    aliquotaICMS = aliquotaICMS * (1 - (incentivo / 100));
+                  incentivoICMS = parseFloat(document.getElementById('incentivo-icms').value) || 0;
+                  aliquotaICMS *= (1 - incentivoICMS / 100);
                 }
 
                 aliquotaTotal += aliquotaICMS;
@@ -293,7 +346,8 @@ const SimuladorFluxoCaixa = {
                 aliquotaTotal += parseFloat(document.getElementById('aliquota-iss').value) || 0;
             }
 
-            parametros.aliquota = aliquotaTotal;
+           // atribui como fração
+            parametros.aliquota = (aliquotaTotal || aliquotaSimples) / 100;
 
             // Adicionar créditos
             parametros.creditosPIS = this.calcularCreditoPIS();
@@ -392,18 +446,31 @@ const SimuladorFluxoCaixa = {
         if (isNaN(dados.faturamento) || dados.faturamento <= 0) {
             throw new Error('Faturamento inválido. Deve ser um número positivo');
         }
-
-        // Verificar alíquota
-        if (!dados.aliquota || isNaN(dados.aliquota) || dados.aliquota <= 0 || dados.aliquota > 1) {
-            throw new Error('Alíquota inválida. Deve ser um número entre 0 e 1');
+        
+        // converte "26.5%" ou "26.5" em 0.265
+        if (typeof dados.aliquota === 'string') {
+          dados.aliquota = parseFloat(dados.aliquota.replace('%', '')) / 100;
         }
 
+        // Verificar alíquota
+        if (typeof dados.aliquota === 'number' && dados.aliquota > 1 && dados.aliquota <= 100) {
+            console.warn('Aliquota em formato percentagem detectada, convertendo para fração');
+            dados.aliquota = dados.aliquota / 100;
+          }
+          // verificação padrão
+          if (!dados.aliquota || isNaN(dados.aliquota) || dados.aliquota <= 0 || dados.aliquota > 1) {
+            throw new Error('Alíquota inválida. Deve ser um número entre 0 e 1');
+          }
+
         // Verificar percentuais
-        if (!dados.percVista || !dados.percPrazo || 
-            isNaN(dados.percVista) || isNaN(dados.percPrazo) ||
-            dados.percVista < 0 || dados.percPrazo < 0 ||
-            Math.abs((dados.percVista + dados.percPrazo) - 1) > 0.01) {
-            throw new Error('Percentuais de vendas à vista e a prazo inválidos. A soma deve ser 1');
+        // antes de validar soma igual a 1
+        if (isNaN(dados.percVista) ||
+            isNaN(dados.percPrazo) ||
+            dados.percVista < 0 ||
+            dados.percPrazo < 0 ||
+            Math.abs(dados.percVista + dados.percPrazo - 1) > 0.01
+        ) {
+          throw new Error('Percentuais de vendas inválidos. A soma deve ser 1');
         }
 
         // Outras validações...
@@ -417,150 +484,144 @@ const SimuladorFluxoCaixa = {
      */
     // simulator.js - linha ~109 (função simular)
     simular: function() {
-        console.log('Iniciando simulação...');
+      console.log('Iniciando simulação...');
+      try {
+        // 1. Obter dados consolidados do formulário
+        const dados = this.obterDadosConsolidados();
+        console.log('Dados obtidos:', dados);
+        console.log(
+          'Faturamento bruto:',
+          document.getElementById('faturamento').value
+        );
+        console.log(
+          'Faturamento processado:',
+          dados.empresa.faturamento,
+          typeof dados.empresa.faturamento
+        );
 
-        try {
-            // Obter dados consolidados do formulário (não apenas do repositório)
-            const dados = this.obterDadosConsolidados();
-            console.log('Dados obtidos:', dados);
-
-            // Verificação de depuração do faturamento
-            console.log('Faturamento bruto:', document.getElementById('faturamento').value);
-            console.log('Faturamento processado:', dados.faturamento, typeof dados.faturamento);
-
-            if (!dados) {
-                throw new Error('Não foi possível obter dados');
-            }
-
-            // Validar dados antes de prosseguir
-            this.validarDados(dados);
-
-            // Extrair ano inicial e final para simulação
-            const anoInicial = parseInt(dados.parametrosSimulacao.dataInicial?.split('-')[0]) || 2026;
-            const anoFinal = parseInt(dados.parametrosSimulacao.dataFinal?.split('-')[0]) || 2033;
-
-            // Consolidar dados para simulação
-            const dadosSimulacao = {
-                faturamento: parseFloat(dados.empresa.faturamento) || 0,
-                margem: parseFloat(dados.empresa.margem) / 100 || 0,
-                setor: dados.empresa.setor,
-                regime: dados.empresa.regime,
-                pmr: parseInt(dados.cicloFinanceiro.pmr) || 0,
-                pmp: parseInt(dados.cicloFinanceiro.pmp) || 0,
-                pme: parseInt(dados.cicloFinanceiro.pme) || 0,
-                percVista: parseFloat(dados.cicloFinanceiro.percVista) / 100 || 0,
-                percPrazo: parseFloat(dados.cicloFinanceiro.percPrazo) / 100 || 0,
-                aliquota: parseFloat(dados.parametrosFiscais.aliquota) / 100 || 0,
-                tipoOperacao: dados.parametrosFiscais.tipoOperacao,
-                creditos: parseFloat(dados.parametrosFiscais.creditos) || 0,
-                cenario: dados.parametrosSimulacao.cenario,
-                taxaCrescimento: parseFloat(dados.parametrosSimulacao.taxaCrescimento) / 100 || 0.05,
-                taxaCapitalGiro: parseFloat(dados.parametrosFinanceiros?.taxaCapitalGiro) / 100 || 0.021,
-                // Adicionar os parâmetros de impostos
-                serviceCompany: dados.empresa.tipoEmpresa === 'servicos',
-                cumulativeRegime: dados.parametrosFiscais.regime === 'cumulativo',
-                creditosPIS: parseFloat(dados.parametrosFiscais.creditosPIS) || 0,
-                creditosCOFINS: parseFloat(dados.parametrosFiscais.creditosCOFINS) || 0,
-                creditosICMS: parseFloat(dados.parametrosFiscais.creditosICMS) || 0,
-                creditosIPI: parseFloat(dados.parametrosFiscais.creditosIPI) || 0,
-                creditosCBS: parseFloat(dados.parametrosFiscais.creditosCBS) || 0,
-                creditosIBS: parseFloat(dados.parametrosFiscais.creditosIBS) || 0
-            };
-
-            console.log('Dados de simulação consolidados:', dadosSimulacao);
-
-            // Calcular impacto inicial
-            let impactoBase = null;
-            try {
-                impactoBase = window.IVADualSystem.calcularImpactoCapitalGiro(dadosSimulacao, anoInicial);
-                console.log('Impacto base calculado:', impactoBase);
-            } catch (erroImpacto) {
-                console.error('Erro ao calcular impacto base:', erroImpacto);
-                // Criar um resultado de fallback
-                impactoBase = this.gerarImpactoBaseFallback(dadosSimulacao);
-            }
-
-            // Obter parâmetros setoriais, se aplicável
-            const parametrosSetoriais = dados.empresa.setor && dados.setoresEspeciais ? 
-                dados.setoresEspeciais[dados.empresa.setor] : null;
-
-            // Simular período de transição de maneira segura
-            let projecaoTemporal = null;
-            try {
-                projecaoTemporal = window.IVADualSystem.calcularProjecaoTemporal(
-                    dadosSimulacao, 
-                    anoInicial, 
-                    anoFinal, 
-                    dados.parametrosSimulacao.cenario, 
-                    dados.parametrosSimulacao.taxaCrescimento,
-                    parametrosSetoriais
-                );
-            } catch (erroProjecao) {
-                console.error('Erro ao calcular projeção temporal:', erroProjecao);
-                projecaoTemporal = {
-                    parametros: {
-                        anoInicial,
-                        anoFinal,
-                        cenarioTaxaCrescimento: dados.parametrosSimulacao.cenario,
-                        taxaCrescimento: dados.parametrosSimulacao.taxaCrescimento || 0.05
-                    },
-                    impactoAcumulado: {
-                        totalNecessidadeCapitalGiro: impactoBase.necesidadeAdicionalCapitalGiro * (anoFinal - anoInicial + 1),
-                        custoFinanceiroTotal: impactoBase.necesidadeAdicionalCapitalGiro * (dados.parametrosFinanceiros?.taxaCapitalGiro || 0.021) * 12 * (anoFinal - anoInicial + 1),
-                        impactoMedioMargem: impactoBase.impactoMargem
-                    }
-                };
-            }
-
-            // Gerar memória de cálculo de maneira segura
-            let memoriaCalculo = null;
-            try {
-                memoriaCalculo = gerarMemoriaCalculo(dadosSimulacao, anoInicial, anoFinal);
-            } catch (erroMemoria) {
-                console.error('Erro ao gerar memória de cálculo:', erroMemoria);
-                memoriaCalculo = {
-                    dadosEntrada: dadosSimulacao,
-                    impactoBase: impactoBase,
-                    projecaoTemporal: projecaoTemporal?.parametros
-                };
-            }
-
-            // Armazenar resultados intermediários para acesso externo
-            _resultadoAtual = impactoBase?.resultadoAtual;
-            _resultadoSplitPayment = impactoBase?.resultadoSplitPayment;
-
-            // Estruturar resultados
-            const resultados = {
-                impactoBase,
-                projecaoTemporal,
-                memoriaCalculo,
-                dadosUtilizados: dadosSimulacao,
-                parametrosSetoriais
-            };
-
-            console.log('Simulação concluída com sucesso');
-            
-            // Atualizar interface imediatamente após a simulação
-            if (typeof window.atualizarInterface === 'function') {
-                window.atualizarInterface(resultados);
-            } else {
-                console.error('Função atualizarInterface não encontrada');
-            }
-
-            // Renderizar gráficos
-            if (typeof window.ChartManager !== 'undefined' && 
-                typeof window.ChartManager.renderizarGraficos === 'function') {
-                window.ChartManager.renderizarGraficos(resultados);
-            } else {
-                console.error('ChartManager não encontrado ou função renderizarGraficos não disponível');
-            }
-            
-            return resultados;
-        } catch (erro) {
-            console.error('Erro durante a simulação:', erro);
-            alert('Ocorreu um erro durante a simulação: ' + erro.message);
-            return null;
+        if (!dados) {
+          throw new Error('Não foi possível obter dados');
         }
+
+        // 2. Criar estrutura plana e validar entradas
+        const dadosSimulacao = this.criarEstruturaPlana(dados);
+        console.log('Dados de simulação consolidados:', dadosSimulacao);
+        this.validarDados(dadosSimulacao);
+
+        // 3. Declarar anoInicial e anoFinal
+        const anoInicial =
+          parseInt(dadosSimulacao.dataInicial.split('-')[0], 10) || 2026;
+        const anoFinal =
+          parseInt(dadosSimulacao.dataFinal.split('-')[0], 10) || 2033;
+
+        // 4. Calcular impacto base com tratamento de erro
+        let impactoBase;
+        try {
+          impactoBase = window.IVADualSystem.calcularImpactoCapitalGiro(
+            dadosSimulacao,
+            anoInicial
+          );
+          console.log('Impacto base calculado:', impactoBase);
+        } catch (erroImpacto) {
+          console.error('Erro ao calcular impacto base:', erroImpacto);
+          impactoBase = this.gerarImpactoBaseFallback(dadosSimulacao);
+        }
+
+        // 5. Preparar parâmetros setoriais (opcional)
+        const parametrosSetoriais =
+          dados.empresa.setor && dados.setoresEspeciais
+            ? dados.setoresEspeciais[dados.empresa.setor]
+            : null;
+
+        // 6. Calcular projeção temporal com fallback
+        let projecaoTemporal;
+        try {
+          projecaoTemporal = window.IVADualSystem.calcularProjecaoTemporal(
+            dadosSimulacao,
+            anoInicial,
+            anoFinal,
+            dados.parametrosSimulacao.cenario,
+            dados.parametrosSimulacao.taxaCrescimento,
+            parametrosSetoriais
+          );
+          console.log('Projeção temporal calculada:', projecaoTemporal);
+        } catch (erroProjecao) {
+          console.error('Erro ao calcular projeção temporal:', erroProjecao);
+          projecaoTemporal = {
+            parametros: {
+              anoInicial,
+              anoFinal,
+              cenario: dados.parametrosSimulacao.cenario,
+              taxaCrescimento: dados.parametrosSimulacao.taxaCrescimento || 0.05
+            },
+            impactoAcumulado: {
+              totalNecessidadeCapitalGiro:
+                impactoBase.necesidadeAdicionalCapitalGiro *
+                (anoFinal - anoInicial + 1),
+              custoFinanceiroTotal:
+                impactoBase.necesidadeAdicionalCapitalGiro *
+                  (dados.parametrosFinanceiros?.taxaCapitalGiro || 0.021) *
+                  12 *
+                  (anoFinal - anoInicial + 1),
+              impactoMedioMargem: impactoBase.impactoMargem
+            }
+          };
+        }
+
+        // 7. Gerar memória de cálculo com assinatura correta
+        let memoriaCalculo;
+        try {
+          memoriaCalculo = gerarMemoriaCalculo(
+            dadosSimulacao,
+            impactoBase,
+            projecaoTemporal
+          );
+        } catch (erroMemoria) {
+          console.error('Erro ao gerar memória de cálculo:', erroMemoria);
+          memoriaCalculo = {
+            dadosEntrada: dadosSimulacao,
+            impactoBase,
+            projecaoTemporal: projecaoTemporal.parametros
+          };
+        }
+
+        // 8. Armazenar resultados e montar objeto de retorno
+        _resultadoAtual = impactoBase.resultadoAtual;
+        _resultadoSplitPayment = impactoBase.resultadoSplitPayment;
+        const resultados = {
+          impactoBase,
+          projecaoTemporal,
+          memoriaCalculo,
+          dadosUtilizados: dadosSimulacao,
+          parametrosSetoriais
+        };
+
+        console.log('Simulação concluída com sucesso');
+
+        // 9. Atualizar interface e gráficos
+        if (typeof window.atualizarInterface === 'function') {
+          window.atualizarInterface(resultados);
+        } else {
+          console.error('Função atualizarInterface não encontrada');
+        }
+
+        if (
+          typeof window.ChartManager !== 'undefined' &&
+          typeof window.ChartManager.renderizarGraficos === 'function'
+        ) {
+          window.ChartManager.renderizarGraficos(resultados);
+        } else {
+          console.error(
+            'ChartManager não encontrado ou função renderizarGraficos indisponível'
+          );
+        }
+
+        return resultados;
+      } catch (erro) {
+        console.error('Erro durante a simulação:', erro);
+        alert('Ocorreu um erro durante a simulação: ' + erro.message);
+        return null;
+      }
     },
 
     /**
