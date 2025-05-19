@@ -669,6 +669,25 @@ window.ChartManager = (function() {
         });
     }
     
+    /**
+     * Limpa todos os gráficos existentes
+     * Útil para reinicializar a interface ou antes de renderizar novos resultados
+     */
+    function limparGraficos() {
+        // Destruir as instâncias existentes de gráficos
+        for (const tipo in _charts) {
+            if (_charts[tipo]) {
+                _charts[tipo].destroy();
+                console.log(`Gráfico de ${tipo} destruído`);
+            }
+        }
+
+        // Reinicializar o objeto _charts
+        _charts = {};
+
+        console.log('Todos os gráficos foram limpos');
+    }
+
     // Exportar API pública
     return {
         inicializar,
@@ -677,7 +696,8 @@ window.ChartManager = (function() {
         renderizarGraficoCapitalGiro,
         renderizarGraficoProjecao,
         renderizarGraficoDecomposicao,
-        renderizarGraficoSensibilidade
+        renderizarGraficoSensibilidade,
+        limparGraficos  // Adicione a nova função aqui
     };
 })();
 

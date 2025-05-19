@@ -8,15 +8,22 @@ const CurrencyFormatter = {
      */
     inicializar: function() {
         console.log('Inicializando formatador de moeda em tempo real');
-        
+
+        // Verificar se DataManager está disponível
+        if (window.DataManager) {
+            console.log('DataManager disponível, utilizando suas funções para formatação monetária');
+        } else {
+            console.warn('DataManager não encontrado, utilizando formatação monetária independente');
+        }
+
         // Selecionar todos os campos monetários pelo seletor de classe
         const camposMoeda = document.querySelectorAll('.money-input');
-        
+
         // Aplicar formatação a cada campo
         camposMoeda.forEach(campo => {
             this.aplicarFormatacaoMoeda(campo);
         });
-        
+
         // Campos específicos por ID (garantia extra)
         const camposEspecificos = [
             'faturamento',
@@ -24,14 +31,14 @@ const CurrencyFormatter = {
             'creditos',
             'creditos-config'
         ];
-        
+
         camposEspecificos.forEach(id => {
             const campo = document.getElementById(id);
             if (campo) {
                 this.aplicarFormatacaoMoeda(campo);
             }
         });
-        
+
         console.log('Formatador de moeda em tempo real inicializado');
     },
     
@@ -44,12 +51,12 @@ const CurrencyFormatter = {
         if (campo.dataset.currencyInitialized === 'true') {
             return;
         }
-        
+
         // Aplicar a classe money-input caso não tenha
         if (!campo.classList.contains('money-input')) {
             campo.classList.add('money-input');
         }
-        
+
         // Adicionar container se não existir
         const parent = campo.parentElement;
         if (!parent.classList.contains('money-input-container')) {
@@ -58,61 +65,79 @@ const CurrencyFormatter = {
             container.className = 'money-input-container';
             parent.insertBefore(container, campo);
             container.appendChild(campo);
-            
+
             // Adicionar o prefixo R$
             const prefix = document.createElement('span');
             prefix.className = 'money-prefix';
             prefix.textContent = 'R$';
             container.appendChild(prefix);
         }
-        
+
+        // Função de formatação que prioriza DataManager ou usa a nossa própria
+        const formatarValor = (valor) => {
+            if (window.DataManager && window.DataManager.formatarMoeda) {
+                // Importante: DataManager.formatarMoeda espera valor em reais, não em centavos
+                return window.DataManager.formatarMoeda(valor);
+            } else {
+                return this.formatarValorMonetario(Math.round(valor * 100).toString());
+            }
+        };
+
+        // Função de extração que usa nosso próprio método para evitar referência circular
+        const extrairValor = (texto) => {
+            return parseFloat(this.extrairNumeros(texto)) / 100;
+        };
+
         // Aplicar formatação inicial se houver valor
         if (campo.value) {
-            let valor = this.extrairNumeros(campo.value);
-            if (valor) {
-                campo.value = this.formatarValorMonetario(valor);
-            } else {
-                campo.value = '';
-            }
-        }
-        
-        // Adicionar listeners para formatação em tempo real
-        campo.addEventListener('input', function(e) {
-            let valor = CurrencyFormatter.extrairNumeros(this.value);
-            
-            // Se não houver valor, deixar vazio
-            if (!valor) {
-                this.value = '';
-                this.dataset.rawValue = '0';
-                return;
-            }
-            
-            // Calcular e armazenar o valor numérico
-            const valorNumerico = parseFloat(valor) / 100;
-            this.dataset.rawValue = valorNumerico.toString();
-            
-            // Formatar e atualizar o campo
-            this.value = CurrencyFormatter.formatarValorMonetario(valor);
-        });
-        
-        // Formatar valor inicial e armazenar valor bruto
-        if (campo.value) {
-            let valor = this.extrairNumeros(campo.value);
-            if (valor) {
-                const valorNumerico = parseFloat(valor) / 100;
+            const valorNumerico = extrairValor(campo.value);
+            if (valorNumerico > 0) {
+                campo.value = formatarValor(valorNumerico);
                 campo.dataset.rawValue = valorNumerico.toString();
-                campo.value = this.formatarValorMonetario(valor);
             } else {
                 campo.value = '';
                 campo.dataset.rawValue = '0';
             }
         }
-        
+
+        // No arquivo currency-formatter.js
+
+        campo.addEventListener('input', function(e) {
+            // Obter somente os dígitos do valor atual digitado
+            const valorDigitado = this.value.replace(/\D/g, '');
+
+            // Se não houver valor, deixar vazio ou zero formatado
+            if (!valorDigitado) {
+                this.value = '';
+                this.dataset.rawValue = '0';
+                return;
+            }
+
+            // Converter para valor numérico (em reais)
+            const valorNumerico = parseFloat(valorDigitado) / 100;
+
+            // Armazenar o valor numérico normalizado
+            this.dataset.rawValue = valorNumerico.toString();
+
+            // Formatar e atualizar o campo
+            this.value = formatarValor(valorNumerico);
+
+            // Disparar evento de normalização para integração
+            const eventoNormalizacao = new CustomEvent('valorNormalizado', {
+                detail: {
+                    campo: this.id,
+                    tipo: 'monetario',
+                    valor: valorNumerico
+                }
+            });
+            this.dispatchEvent(eventoNormalizacao);
+        });
+
         // Selecionar todo o conteúdo ao focar
         campo.addEventListener('focus', function() {
             this.select();
         });
-        
+
         // Marcar como inicializado
         campo.dataset.currencyInitialized = 'true';
     },
@@ -123,6 +148,13 @@ const CurrencyFormatter = {
      * @returns {string} - Apenas os dígitos
      */
     extrairNumeros: function(texto) {
+        // Se o DataManager estiver disponível, tentar usar sua função
+        if (window.DataManager && window.DataManager.extrairValorMonetario) {
+            // A função do DataManager retorna o valor em reais (não em centavos)
+            // Converter para formato de centavos (string) para manter compatibilidade
+            const valorEmReais = window.DataManager.extrairValorMonetario(texto);
+            return Math.round(valorEmReais * 100).toString();
+        }                       
         return texto.replace(/\D/g, '');
     },
     
@@ -132,9 +164,17 @@ const CurrencyFormatter = {
      * @returns {string} - Valor formatado (ex: R$ 1.234,56)
      */
     formatarValorMonetario: function(valor) {
+        // Se o DataManager estiver disponível, usar sua implementação
+        if (window.DataManager && window.DataManager.formatarMoeda) {
+            // Converter de centavos para reais, pois o DataManager espera valor em reais
+            const valorEmReais = parseFloat(valor) / 100;
+            return window.DataManager.formatarMoeda(valorEmReais);
+        }
+
+        // Implementação original como fallback
         // Converter para número e dividir por 100 (para considerar centavos)
         const valorNumerico = parseFloat(valor) / 100;
-        
+
         // Formatar no padrão brasileiro
         return valorNumerico.toLocaleString('pt-BR', {
             style: 'currency',
@@ -142,6 +182,21 @@ const CurrencyFormatter = {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         });
+    },
+    
+    obterValorNumerico: function(campo) {
+        // Se o campo tiver um rawValue no dataset, usar esse valor
+        if (campo && campo.dataset && campo.dataset.rawValue) {
+            return parseFloat(campo.dataset.rawValue) || 0;
+        }
+
+        // Caso contrário, extrair o valor diretamente do campo
+        if (!campo) return 0;
+
+        // Usar DataManager se disponível ou extrair diretamente
+        return window.DataManager ? 
+            window.DataManager.extrairValorMonetario(campo.value) : 
+            parseFloat(this.extrairNumeros(campo.value)) / 100;
     }
 };
 

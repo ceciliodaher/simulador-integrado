@@ -8,25 +8,43 @@
 
 // No início do arquivo calculation-core.js (antes de qualquer código)
 // Garantir que o objeto exista antes de qualquer tentativa de acesso
-window.CalculationCore = window.CalculationCore || {};
+// Inicializar o objeto se não existir
+window.CalculationCore = window.CalculationCore || {
+    formatarMoeda: function(valor) {
+        return typeof valor === 'number' ? 
+               'R$ ' + valor.toFixed(2).replace('.', ',') : 
+               'R$ 0,00';
+    }
+};
 
-// Resto do código do módulo
+// Verificar disponibilidade do DataManager
+if (typeof window.DataManager === 'undefined') {
+    console.warn('DataManager não encontrado. Algumas validações de dados podem não funcionar corretamente.');
+}
+
+// Módulo principal
 window.CalculationCore = (function() {
+    
     /**
      * Calcula o tempo médio do capital em giro
-     * 
-     * @param {number} pmr - Prazo Médio de Recebimento
-     * @param {number} prazoRecolhimento - Prazo para recolhimento do imposto
-     * @param {number} percVista - Percentual de vendas à vista
-     * @param {number} percPrazo - Percentual de vendas a prazo
+     * @param {number} pmr - Prazo Médio de Recebimento em dias
+     * @param {number} prazoRecolhimento - Prazo para recolhimento do imposto em dias
+     * @param {number} percVista - Percentual de vendas à vista (decimal 0-1)
+     * @param {number} percPrazo - Percentual de vendas a prazo (decimal 0-1)
      * @returns {number} - Tempo médio em dias
      */
     function calcularTempoMedioCapitalGiro(pmr, prazoRecolhimento, percVista, percPrazo) {
+        // Validar e normalizar entradas
+        pmr = typeof pmr === 'number' && !isNaN(pmr) ? pmr : 0;
+        prazoRecolhimento = typeof prazoRecolhimento === 'number' && !isNaN(prazoRecolhimento) ? prazoRecolhimento : 0;
+        percVista = typeof percVista === 'number' && !isNaN(percVista) ? percVista : 0;
+        percPrazo = typeof percPrazo === 'number' && !isNaN(percPrazo) ? percPrazo : 0;
+
         // Para vendas à vista: tempo = prazo recolhimento
+        const tempoVista = prazoRecolhimento;
+
         // Para vendas a prazo: tempo = prazo recolhimento - pmr (se pmr < prazo recolhimento)
         // Para vendas a prazo: tempo = 0 (se pmr >= prazo recolhimento)
-
-        const tempoVista = prazoRecolhimento;
         const tempoPrazo = Math.max(0, prazoRecolhimento - pmr);
 
         // Tempo médio ponderado
@@ -35,11 +53,22 @@ window.CalculationCore = (function() {
 
     /**
      * Calcula o fator de sazonalidade para ajuste da necessidade de capital
-     * 
-     * @param {Object} dados - Dados da empresa e parâmetros de simulação
+     * @param {Object} dados - Dados planos de simulação
      * @returns {number} - Fator de sazonalidade
      */
     function calcularFatorSazonalidade(dados) {
+        // Validar dados de entrada
+        if (!dados || typeof dados !== 'object') {
+            console.warn('Dados inválidos fornecidos para calcularFatorSazonalidade. Usando valor padrão.');
+            return 1.3;
+        }
+
+        // Certificar-se de que estamos trabalhando com a estrutura plana
+        if (dados.empresa !== undefined) {
+            console.warn('Estrutura aninhada detectada em calcularFatorSazonalidade. Use DataManager.converterParaEstruturaPlana().');
+            return 1.3;
+        }
+
         // Implementação básica: fator padrão de 1.3 (30% de aumento)
         // Em uma implementação real, este cálculo seria baseado em dados históricos
         // de sazonalidade específicos da empresa ou do setor
@@ -48,25 +77,46 @@ window.CalculationCore = (function() {
 
     /**
      * Calcula o fator de crescimento para ajuste da necessidade de capital
-     * 
-     * @param {Object} dados - Dados da empresa e parâmetros de simulação
+     * @param {Object} dados - Dados planos de simulação
      * @param {number} ano - Ano de referência
      * @returns {number} - Fator de crescimento
      */
     function calcularFatorCrescimento(dados, ano) {
+        // Validar dados de entrada
+        if (!dados || typeof dados !== 'object') {
+            console.warn('Dados inválidos fornecidos para calcularFatorCrescimento. Usando cenário moderado.');
+            return Math.pow(1 + 0.05, (ano - 2026));
+        }
+
+        // Certificar-se de que estamos trabalhando com a estrutura plana
+        if (dados.empresa !== undefined) {
+            console.warn('Estrutura aninhada detectada em calcularFatorCrescimento. Use DataManager.converterParaEstruturaPlana().');
+            // Tenta extrair os dados necessários da estrutura aninhada como fallback
+            const dadosPlanos = window.DataManager ? 
+                window.DataManager.converterParaEstruturaPlana(dados) : 
+                { cenario: 'moderado', taxaCrescimento: 0.05 };
+
+            return calcularFatorCrescimento(dadosPlanos, ano);
+        }
+
+        // Normalizar dados
+        ano = typeof ano === 'number' && !isNaN(ano) ? ano : 2026;
+        const cenario = dados.cenario || 'moderado';
+        const taxaCrescimentoPersonalizada = typeof dados.taxaCrescimento === 'number' && !isNaN(dados.taxaCrescimento) ? 
+                                            dados.taxaCrescimento : null;
+
         // Definir taxa de crescimento com base no cenário
         let taxaCrescimento = 0.05; // Padrão: moderado (5% a.a.)
 
-        if (dados.cenario === 'conservador') {
+        if (cenario === 'conservador') {
             taxaCrescimento = 0.02; // 2% a.a.
-        } else if (dados.cenario === 'otimista') {
+        } else if (cenario === 'otimista') {
             taxaCrescimento = 0.08; // 8% a.a.
-        } else if (dados.cenario === 'personalizado' && dados.taxaCrescimento !== null) {
-            taxaCrescimento = dados.taxaCrescimento;
+        } else if (cenario === 'personalizado' && taxaCrescimentoPersonalizada !== null) {
+            taxaCrescimento = taxaCrescimentoPersonalizada;
         }
 
         // Calcular fator para o ano de referência
-        // Considerando crescimento proporcional ao avanço da implementação
         const anoInicial = 2026;
         const anosDecorridos = ano - anoInicial;
 
@@ -76,31 +126,63 @@ window.CalculationCore = (function() {
 
     /**
      * Calcula as opções de financiamento para a necessidade de capital
-     * 
-     * @param {Object} dados - Dados da empresa e parâmetros de simulação
+     * @param {Object} dados - Dados planos de simulação
      * @param {number} valorNecessidade - Valor da necessidade de capital
      * @returns {Object} - Opções de financiamento
      */
     function calcularOpcoesFinanciamento(dados, valorNecessidade) {
+        // Validar dados de entrada
+        if (!dados || typeof dados !== 'object') {
+            console.warn('Dados inválidos fornecidos para calcularOpcoesFinanciamento. Usando valores padrão.');
+            dados = {};
+        }
+
+        // Certificar-se de que estamos trabalhando com a estrutura plana
+        if (dados.empresa !== undefined) {
+            console.warn('Estrutura aninhada detectada em calcularOpcoesFinanciamento. Use DataManager.converterParaEstruturaPlana().');
+            // Tenta extrair os dados necessários da estrutura aninhada como fallback
+            const dadosPlanos = window.DataManager ? 
+                window.DataManager.converterParaEstruturaPlana(dados) : 
+                {};
+
+            return calcularOpcoesFinanciamento(dadosPlanos, valorNecessidade);
+        }
+
+        // Normalizar valor de necessidade
+        valorNecessidade = typeof valorNecessidade === 'number' && !isNaN(valorNecessidade) ? 
+                          valorNecessidade : 0;
+
+        // Extrair e normalizar parâmetros relevantes do objeto plano
+        const taxaCapitalGiro = typeof dados.taxaCapitalGiro === 'number' && !isNaN(dados.taxaCapitalGiro) ? 
+                               dados.taxaCapitalGiro : 0.021;
+        const taxaAntecipacao = typeof dados.taxaAntecipacao === 'number' && !isNaN(dados.taxaAntecipacao) ? 
+                               dados.taxaAntecipacao : 0.018;
+        const spreadBancario = typeof dados.spreadBancario === 'number' && !isNaN(dados.spreadBancario) ? 
+                              dados.spreadBancario : 0.005;
+        const faturamento = typeof dados.faturamento === 'number' && !isNaN(dados.faturamento) ? 
+                           dados.faturamento : 0;
+        const percPrazo = typeof dados.percPrazo === 'number' && !isNaN(dados.percPrazo) ? 
+                         dados.percPrazo : 0.7;
+
         // Definir opções de financiamento disponíveis
         const opcoes = [
             {
                 tipo: "Capital de Giro",
-                taxaMensal: dados.taxaCapitalGiro || 0.021,
+                taxaMensal: taxaCapitalGiro,
                 prazo: 12,
                 carencia: 3,
                 valorMaximo: valorNecessidade * 1.5
             },
             {
                 tipo: "Antecipação de Recebíveis",
-                taxaMensal: dados.taxaAntecipacao || 0.018,
+                taxaMensal: taxaAntecipacao,
                 prazo: 6,
                 carencia: 0,
-                valorMaximo: dados.faturamento * dados.percPrazo * 3
+                valorMaximo: faturamento * percPrazo * 3
             },
             {
                 tipo: "Empréstimo Bancário",
-                taxaMensal: (dados.taxaCapitalGiro || 0.021) + (dados.spreadBancario || 0.005),
+                taxaMensal: taxaCapitalGiro + spreadBancario,
                 prazo: 24,
                 carencia: 6,
                 valorMaximo: valorNecessidade * 2
@@ -142,25 +224,50 @@ window.CalculationCore = (function() {
 
     /**
      * Calcula o impacto no resultado de um custo financeiro
-     * 
-     * @param {Object} dados - Dados da empresa e parâmetros de simulação
+     * @param {Object} dados - Dados planos de simulação
      * @param {number} custoAnual - Custo financeiro anual
      * @returns {Object} - Análise de impacto no resultado
      */
     function calcularImpactoResultado(dados, custoAnual) {
+        // Validar dados de entrada
+        if (!dados || typeof dados !== 'object') {
+            console.warn('Dados inválidos fornecidos para calcularImpactoResultado. Usando valores padrão.');
+            dados = {};
+        }
+
+        // Certificar-se de que estamos trabalhando com a estrutura plana
+        if (dados.empresa !== undefined) {
+            console.warn('Estrutura aninhada detectada em calcularImpactoResultado. Use DataManager.converterParaEstruturaPlana().');
+            const dadosPlanos = window.DataManager ? 
+                window.DataManager.converterParaEstruturaPlana(dados) : 
+                { faturamento: 0, margem: 0 };
+
+            return calcularImpactoResultado(dadosPlanos, custoAnual);
+        }
+
+        // Normalizar parâmetros
+        custoAnual = typeof custoAnual === 'number' && !isNaN(custoAnual) ? custoAnual : 0;
+        const faturamento = typeof dados.faturamento === 'number' && !isNaN(dados.faturamento) ? 
+                           dados.faturamento : 0;
+        const margem = typeof dados.margem === 'number' && !isNaN(dados.margem) ? 
+                      dados.margem : 0;
+
         // Calcular faturamento anual
-        const faturamentoAnual = dados.faturamento * 12;
+        const faturamentoAnual = faturamento * 12;
 
         // Calcular lucro operacional anual
-        const lucroOperacionalAnual = faturamentoAnual * dados.margem;
+        const lucroOperacionalAnual = faturamentoAnual * margem;
 
-        // Calcular percentuais
-        const percentualDaReceita = (custoAnual / faturamentoAnual) * 100;
-        const percentualDoLucro = (custoAnual / lucroOperacionalAnual) * 100;
+        // Calcular percentuais com proteção contra divisão por zero
+        const percentualDaReceita = faturamentoAnual > 0 ? 
+                                  (custoAnual / faturamentoAnual) * 100 : 0;
+        const percentualDoLucro = lucroOperacionalAnual > 0 ? 
+                                (custoAnual / lucroOperacionalAnual) * 100 : 0;
 
         // Calcular resultado ajustado
         const resultadoAjustado = lucroOperacionalAnual - custoAnual;
-        const margemAjustada = resultadoAjustado / faturamentoAnual;
+        const margemAjustada = faturamentoAnual > 0 ? 
+                              resultadoAjustado / faturamentoAnual : 0;
 
         return {
             faturamentoAnual,
@@ -175,15 +282,39 @@ window.CalculationCore = (function() {
 
     /**
      * Calcula a análise de elasticidade para diferentes cenários de crescimento
-     * 
-     * @param {Object} dados - Dados da empresa e parâmetros de simulação
+     * @param {Object} dados - Dados planos de simulação
      * @param {number} anoInicial - Ano inicial da simulação
      * @param {number} anoFinal - Ano final da simulação
      * @param {Object} parametrosSetoriais - Parâmetros específicos do setor (opcional)
      * @returns {Object} - Análise de elasticidade
      */
-    // Substituir a implementação atual por esta versão sem dependência circular
     function calcularAnaliseElasticidade(dados, anoInicial, anoFinal, parametrosSetoriais = null) {
+        // Validar dados de entrada
+        if (!dados || typeof dados !== 'object') {
+            console.warn('Dados inválidos fornecidos para calcularAnaliseElasticidade. Usando valores padrão.');
+            dados = {};
+        }
+
+        // Certificar-se de que estamos trabalhando com a estrutura plana
+        if (dados.empresa !== undefined) {
+            console.warn('Estrutura aninhada detectada em calcularAnaliseElasticidade. Use DataManager.converterParaEstruturaPlana().');
+            const dadosPlanos = window.DataManager ? 
+                window.DataManager.converterParaEstruturaPlana(dados) : 
+                { faturamento: 0, aliquota: 0.265, taxaCapitalGiro: 0.021 };
+
+            return calcularAnaliseElasticidade(dadosPlanos, anoInicial, anoFinal, parametrosSetoriais);
+        }
+
+        // Normalizar parâmetros
+        anoInicial = typeof anoInicial === 'number' && !isNaN(anoInicial) ? anoInicial : 2026;
+        anoFinal = typeof anoFinal === 'number' && !isNaN(anoFinal) ? anoFinal : 2033;
+        const faturamento = typeof dados.faturamento === 'number' && !isNaN(dados.faturamento) ? 
+                           dados.faturamento : 0;
+        const aliquota = typeof dados.aliquota === 'number' && !isNaN(dados.aliquota) ? 
+                        dados.aliquota : 0.265;
+        const taxaCapitalGiro = typeof dados.taxaCapitalGiro === 'number' && !isNaN(dados.taxaCapitalGiro) ? 
+                               dados.taxaCapitalGiro : 0.021;
+
         // Definir cenários de taxa de crescimento
         const cenarios = [
             { nome: "Recessão", taxa: -0.02 },
@@ -199,15 +330,16 @@ window.CalculationCore = (function() {
 
         cenarios.forEach(cenario => {
             // Cálculo simplificado do impacto
-            const impactoBase = dados.faturamento * dados.aliquota;
+            const impactoBase = faturamento * aliquota;
             const fatorCrescimento = Math.pow(1 + cenario.taxa, (anoFinal - anoInicial));
             const impactoEstimado = impactoBase * fatorCrescimento * (anoFinal - anoInicial + 1) * 0.5;
 
             resultados[cenario.nome] = {
                 taxa: cenario.taxa,
                 impactoAcumulado: impactoEstimado,
-                custoFinanceiroTotal: impactoEstimado * (dados.taxaCapitalGiro || 0.021) * 12,
-                impactoMedioMargem: (impactoEstimado / dados.faturamento) * (dados.taxaCapitalGiro || 0.021)
+                custoFinanceiroTotal: impactoEstimado * taxaCapitalGiro * 12,
+                impactoMedioMargem: faturamento > 0 ? 
+                                   (impactoEstimado / faturamento) * taxaCapitalGiro : 0
             };
         });
 
@@ -218,8 +350,10 @@ window.CalculationCore = (function() {
 
         cenarios.forEach(cenario => {
             if (cenario.nome !== "Moderado") {
-                const variacaoImpacto = (resultados[cenario.nome].impactoAcumulado - referenciaImpacto) / referenciaImpacto;
-                const variacaoTaxa = (cenario.taxa - referenciaTaxa) / referenciaTaxa;
+                const variacaoImpacto = referenciaImpacto > 0 ? 
+                                      (resultados[cenario.nome].impactoAcumulado - referenciaImpacto) / referenciaImpacto : 0;
+                const variacaoTaxa = referenciaTaxa !== 0 ? 
+                                   (cenario.taxa - referenciaTaxa) / referenciaTaxa : 0;
                 elasticidades[cenario.nome] = variacaoTaxa !== 0 ? variacaoImpacto / variacaoTaxa : 0;
             }
         });
@@ -233,26 +367,45 @@ window.CalculationCore = (function() {
 
     /**
      * Gera memória crítica de cálculo
-     * @param {Object} dados - Dados da simulação
-     * @param {Object} resultados - Resultados das estratégias (opcional)
-     * @param {Object} flags - Flags de controle para evitar recursão (opcional)
+     * @param {Object} dados - Dados planos de simulação
+     * @param {Object} valores - Valores adicionais para cálculo (opcional)
      * @returns {Object} - Memória crítica de cálculo
      */
-    // Implementação simplificada e isolada
     function gerarMemoriaCritica(dados, valores = null) {
-        // Extrair ou definir valores seguros
-        const faturamento = dados?.faturamento || 0;
-        const aliquota = dados?.aliquota || 0;
-        const creditos = dados?.creditos || 0;
-        const percVista = dados?.percVista || 0;
-        const percPrazo = dados?.percPrazo || 0;
+        // Validar dados de entrada
+        if (!dados || typeof dados !== 'object') {
+            console.warn('Dados inválidos fornecidos para gerarMemoriaCritica. Usando valores padrão.');
+            dados = {};
+        }
+
+        // Certificar-se de que estamos trabalhando com a estrutura plana
+        if (dados.empresa !== undefined) {
+            console.warn('Estrutura aninhada detectada em gerarMemoriaCritica. Use DataManager.converterParaEstruturaPlana().');
+            const dadosPlanos = window.DataManager ? 
+                window.DataManager.converterParaEstruturaPlana(dados) : 
+                {};
+
+            return gerarMemoriaCritica(dadosPlanos, valores);
+        }
+
+        // Extrair parâmetros relevantes com validação
+        const faturamento = typeof dados.faturamento === 'number' && !isNaN(dados.faturamento) ? 
+                           dados.faturamento : 0;
+        const aliquota = typeof dados.aliquota === 'number' && !isNaN(dados.aliquota) ? 
+                        dados.aliquota : 0;
+        const creditos = typeof dados.creditos === 'number' && !isNaN(dados.creditos) ? 
+                        dados.creditos : 0;
+        const percVista = typeof dados.percVista === 'number' && !isNaN(dados.percVista) ? 
+                         dados.percVista : 0;
+        const percPrazo = typeof dados.percPrazo === 'number' && !isNaN(dados.percPrazo) ? 
+                         dados.percPrazo : 0;
 
         // Calcular valores básicos sem recursão
         const valorImpostoTotal = faturamento * aliquota;
         const valorImpostoLiquido = Math.max(0, valorImpostoTotal - creditos);
 
-        // Formatação direta sem chamar outras funções
-        const formatoMoeda = (valor) => {
+        // Usar função formatarMoeda do DataManager se disponível, senão usar implementação local
+        const formatoMoeda = window.DataManager?.formatarMoeda || function(valor) {
             const num = parseFloat(valor) || 0;
             return 'R$ ' + num.toFixed(2).replace('.', ',');
         };
@@ -383,23 +536,28 @@ window.CalculationCore = (function() {
         return texto;
     }
 
-	 /* Formata um valor numérico para o formato monetário brasileiro (R$)
-	 * @param {number|string} valor - Valor a ser formatado
-	 * @returns {string} - Valor formatado como moeda
-	 */
-	 // Nova implementação da função de formatação
-     // Nova implementação da função de formatação
+	/**
+     * Formata um valor numérico para o formato monetário brasileiro (R$)
+     * @param {number|string} valor - Valor a ser formatado
+     * @returns {string} - Valor formatado como moeda
+     */
     function formatarMoeda(valor) {
+        // Utilizar formatador do DataManager se disponível
+        if (window.DataManager && typeof window.DataManager.formatarMoeda === 'function') {
+            return window.DataManager.formatarMoeda(valor);
+        }
+
+        // Implementação local (fallback)
         // Verificação rápida
         if (valor === undefined || valor === null) {
             return 'R$ 0,00';
         }
-        
+
         // Se já for string formatada como moeda
         if (typeof valor === 'string' && valor.indexOf('R$') >= 0) {
             return valor;
         }
-        
+
         // Conversão simples e direta
         let num = 0;
         try {
@@ -408,15 +566,15 @@ window.CalculationCore = (function() {
         } catch (e) {
             return 'R$ 0,00';
         }
-        
+
         if (isNaN(num)) {
             return 'R$ 0,00';
         }
-        
+
         // Formatação direta sem regex
         const inteiro = Math.abs(Math.floor(num)).toString();
         const decimal = Math.abs(num).toFixed(2).slice(-2);
-        
+
         // Formatação manual da parte inteira
         let resultado = '';
         for (let i = 0; i < inteiro.length; i++) {
@@ -425,7 +583,7 @@ window.CalculationCore = (function() {
             }
             resultado += inteiro.charAt(i);
         }
-        
+
         if (num < 0) resultado = '-' + resultado;
         return 'R$ ' + resultado + ',' + decimal;
     }

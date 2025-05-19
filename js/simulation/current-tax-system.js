@@ -1,22 +1,31 @@
-// No início de current-tax-system.js e iva-dual-system.js
-// Inicializar o objeto se não existir
-window.CalculationCore = window.CalculationCore || {
-    formatarMoeda: function(valor) {
-        return typeof valor === 'number' ? 
-               'R$ ' + valor.toFixed(2).replace('.', ',') : 
-               'R$ 0,00';
-    },
-    formatarValorSeguro: function(valor) {
-        return typeof valor === 'number' ? 
-               'R$ ' + valor.toFixed(2).replace('.', ',') : 
-               'R$ 0,00';
-    },
-    calcularTempoMedioCapitalGiro: function(pmr, prazoRecolhimento, percVista, percPrazo) {
-        // Implementação fallback simplificada
-        const tempoVista = prazoRecolhimento;
-        const tempoPrazo = Math.max(0, prazoRecolhimento - pmr);
-        return (percVista * tempoVista) + (percPrazo * tempoPrazo);
-    }
+// Inicialização padronizada do CalculationCore
+window.CalculationCore = window.CalculationCore || {};
+
+// Verificar se o DataManager está disponível e configurar métodos de formatação
+if (typeof window.DataManager === 'undefined') {
+    console.warn('DataManager não encontrado. Implementando funções básicas de formatação no CalculationCore.');
+    
+    // Implementação de fallback para formatação
+    window.CalculationCore.formatarMoeda = window.CalculationCore.formatarMoeda || function(valor) {
+        const num = parseFloat(valor) || 0;
+        return 'R$ ' + num.toFixed(2).replace('.', ',');
+    };
+    
+    window.CalculationCore.formatarValorSeguro = window.CalculationCore.formatarValorSeguro || function(valor) {
+        const num = parseFloat(valor) || 0;
+        return 'R$ ' + num.toFixed(2).replace('.', ',');
+    };
+} else {
+    // Usar métodos do DataManager quando disponível
+    window.CalculationCore.formatarMoeda = window.DataManager.formatarMoeda;
+    window.CalculationCore.formatarValorSeguro = window.DataManager.formatarValorSeguro;
+}
+
+// Métodos essenciais que não dependem do DataManager
+window.CalculationCore.calcularTempoMedioCapitalGiro = window.CalculationCore.calcularTempoMedioCapitalGiro || function(pmr, prazoRecolhimento, percVista, percPrazo) {
+    const tempoVista = prazoRecolhimento;
+    const tempoPrazo = Math.max(0, prazoRecolhimento - pmr);
+    return (percVista * tempoVista) + (percPrazo * tempoPrazo);
 };
 
 /**
@@ -57,6 +66,18 @@ window.CurrentTaxSystem = (function() {
      * @returns {number} - Percentual de implementação (decimal)
      */
     function obterPercentualImplementacao(ano, parametrosSetoriais = null) {
+        // Validar tipo do parâmetro ano
+        if (typeof ano !== 'number' || isNaN(ano) || ano < 2026 || ano > 2050) {
+            console.warn(`Ano inválido para cálculo de percentual de implementação: ${ano}. Usando valor padrão.`);
+            ano = 2026;
+        }
+
+        // Validar formato dos parâmetros setoriais
+        if (parametrosSetoriais !== null && typeof parametrosSetoriais !== 'object') {
+            console.warn('Formato inválido de parâmetros setoriais. Ignorando.');
+            parametrosSetoriais = null;
+        }
+
         // Cronograma padrão de implementação
         const cronogramaPadrao = {
             2026: 0.10,
@@ -70,7 +91,10 @@ window.CurrentTaxSystem = (function() {
         };
 
         // Se houver parâmetros setoriais com cronograma próprio, utilizar
-        if (parametrosSetoriais && parametrosSetoriais.cronogramaProprio && parametrosSetoriais.cronograma && parametrosSetoriais.cronograma[ano]) {
+        if (parametrosSetoriais && 
+            parametrosSetoriais.cronogramaProprio && 
+            parametrosSetoriais.cronograma && 
+            typeof parametrosSetoriais.cronograma[ano] === 'number') {
             return parametrosSetoriais.cronograma[ano];
         }
 
@@ -87,6 +111,12 @@ window.CurrentTaxSystem = (function() {
      * @returns {number} Valor do PIS a recolher
      */
     function calcularPIS(revenue, rate = aliquotasPadrao.pis, cumulativeRegime = false, credits = 0) {
+        // Validar e normalizar os parâmetros
+        revenue = typeof revenue === 'number' && !isNaN(revenue) ? revenue : 0;
+        rate = typeof rate === 'number' && !isNaN(rate) ? rate : aliquotasPadrao.pis;
+        cumulativeRegime = !!cumulativeRegime; // Converte para booleano
+        credits = typeof credits === 'number' && !isNaN(credits) ? Math.max(0, credits) : 0;
+
         if (cumulativeRegime) {
             rate = 0.0065; // Alíquota para regime cumulativo
             return revenue * rate;
@@ -106,6 +136,12 @@ window.CurrentTaxSystem = (function() {
      * @returns {number} Valor do COFINS a recolher
      */
     function calcularCOFINS(revenue, rate = aliquotasPadrao.cofins, cumulativeRegime = false, credits = 0) {
+        // Validar e normalizar os parâmetros
+        revenue = typeof revenue === 'number' && !isNaN(revenue) ? revenue : 0;
+        rate = typeof rate === 'number' && !isNaN(rate) ? rate : aliquotasPadrao.cofins;
+        cumulativeRegime = !!cumulativeRegime; // Converte para booleano
+        credits = typeof credits === 'number' && !isNaN(credits) ? Math.max(0, credits) : 0;
+
         if (cumulativeRegime) {
             rate = 0.03; // Alíquota para regime cumulativo
             return revenue * rate;
@@ -116,7 +152,8 @@ window.CurrentTaxSystem = (function() {
         return Math.max(0, tax - credits);
     }
 
-    /**
+
+   /**
      * Calcula o ICMS a ser recolhido
      * @param {number} revenue - Receita bruta
      * @param {number} [rate=aliquotasPadrao.icms.intrastate] - Alíquota do ICMS
@@ -125,6 +162,12 @@ window.CurrentTaxSystem = (function() {
      * @returns {number} Valor do ICMS a recolher
      */
     function calcularICMS(revenue, rate = aliquotasPadrao.icms.intrastate, credits = 0, substituicaoTributaria = false) {
+        // Validar e normalizar os parâmetros
+        revenue = typeof revenue === 'number' && !isNaN(revenue) ? revenue : 0;
+        rate = typeof rate === 'number' && !isNaN(rate) ? rate : aliquotasPadrao.icms.intrastate;
+        credits = typeof credits === 'number' && !isNaN(credits) ? Math.max(0, credits) : 0;
+        substituicaoTributaria = !!substituicaoTributaria; // Converte para booleano
+
         if (substituicaoTributaria) {
             // No caso de ST, considera-se que o ICMS já foi recolhido anteriormente
             return 0;
@@ -134,6 +177,7 @@ window.CurrentTaxSystem = (function() {
         return Math.max(0, tax - credits);
     }
 
+
     /**
      * Calcula o IPI a ser recolhido
      * @param {number} productValue - Valor do produto
@@ -142,9 +186,15 @@ window.CurrentTaxSystem = (function() {
      * @returns {number} Valor do IPI a recolher
      */
     function calcularIPI(productValue, rate = aliquotasPadrao.ipi, credits = 0) {
+        // Validar e normalizar os parâmetros
+        productValue = typeof productValue === 'number' && !isNaN(productValue) ? productValue : 0;
+        rate = typeof rate === 'number' && !isNaN(rate) ? rate : aliquotasPadrao.ipi;
+        credits = typeof credits === 'number' && !isNaN(credits) ? Math.max(0, credits) : 0;
+
         const tax = productValue * rate;
         return Math.max(0, tax - credits);
     }
+
 
     /**
      * Calcula o ISS a ser recolhido
@@ -153,12 +203,17 @@ window.CurrentTaxSystem = (function() {
      * @returns {number} Valor do ISS a recolher
      */
     function calcularISS(serviceValue, rate = aliquotasPadrao.issqn) {
+        // Validar e normalizar os parâmetros
+        serviceValue = typeof serviceValue === 'number' && !isNaN(serviceValue) ? serviceValue : 0;
+        rate = typeof rate === 'number' && !isNaN(rate) ? rate : aliquotasPadrao.issqn;
+
         return serviceValue * rate;
     }
 
+
     /**
      * Calcula todos os impostos do sistema atual para uma operação
-     * @param {Object} params - Parâmetros da operação
+     * @param {Object} params - Parâmetros da operação em formato plano
      * @param {number} params.revenue - Receita bruta
      * @param {boolean} [params.serviceCompany=false] - Indica se é empresa de serviços
      * @param {boolean} [params.cumulativeRegime=false] - Regime cumulativo (true) ou não-cumulativo (false)
@@ -166,18 +221,40 @@ window.CurrentTaxSystem = (function() {
      * @returns {Object} Objeto contendo todos os impostos calculados
      */
     function calcularTodosImpostosAtuais(params) {
-        const { revenue, serviceCompany = false, cumulativeRegime = false, credits = {} } = params;
+        // Verificar se os parâmetros estão em formato plano
+        if (params.empresa !== undefined || params.parametrosFiscais !== undefined) {
+            console.error('calcularTodosImpostosAtuais recebeu estrutura aninhada. Utilize DataManager.converterParaEstruturaPlana()');
+            // Tenta recuperar usando o DataManager se disponível
+            if (window.DataManager && typeof window.DataManager.converterParaEstruturaPlana === 'function') {
+                params = window.DataManager.converterParaEstruturaPlana(params);
+            } else {
+                throw new Error('Estrutura de dados incompatível e DataManager não disponível para conversão');
+            }
+        }
+
+        // Extrair e validar parâmetros
+        const revenue = typeof params.revenue === 'number' && !isNaN(params.revenue) ? params.revenue : 0;
+        const serviceCompany = !!params.serviceCompany; // Converte para booleano
+        const cumulativeRegime = !!params.cumulativeRegime; // Converte para booleano
+
+        // Aplicar valores padrão para créditos
+        const credits = {
+            pis: typeof params.credits?.pis === 'number' ? params.credits.pis : 0,
+            cofins: typeof params.credits?.cofins === 'number' ? params.credits.cofins : 0,
+            icms: typeof params.credits?.icms === 'number' ? params.credits.icms : 0,
+            ipi: typeof params.credits?.ipi === 'number' ? params.credits.ipi : 0
+        };
 
         const result = {
-            pis: calcularPIS(revenue, aliquotasPadrao.pis, cumulativeRegime, credits.pis || 0),
-            cofins: calcularCOFINS(revenue, aliquotasPadrao.cofins, cumulativeRegime, credits.cofins || 0)
+            pis: calcularPIS(revenue, aliquotasPadrao.pis, cumulativeRegime, credits.pis),
+            cofins: calcularCOFINS(revenue, aliquotasPadrao.cofins, cumulativeRegime, credits.cofins)
         };
 
         if (serviceCompany) {
             result.iss = calcularISS(revenue, aliquotasPadrao.issqn);
         } else {
-            result.icms = calcularICMS(revenue, aliquotasPadrao.icms.intrastate, credits.icms || 0);
-            result.ipi = calcularIPI(revenue, aliquotasPadrao.ipi, credits.ipi || 0);
+            result.icms = calcularICMS(revenue, aliquotasPadrao.icms.intrastate, credits.icms);
+            result.ipi = calcularIPI(revenue, aliquotasPadrao.ipi, credits.ipi);
         }
 
         // Cálculo total
@@ -187,22 +264,84 @@ window.CurrentTaxSystem = (function() {
     }
 
     /**
+     * Wrapper de compatibilidade que aceita tanto estrutura plana quanto aninhada
+     * @param {Object} dados - Dados da operação (formato plano ou aninhado)
+     * @returns {Object} Resultado do cálculo de impostos
+     */
+    function calcularTodosImpostosAtuaisCompat(dados) {
+        // Verificar formato e converter se necessário
+        let dadosPlanos;
+
+        if (dados.empresa !== undefined || dados.parametrosFiscais !== undefined) {
+            // Dados em formato aninhado, converter para plano
+            if (window.DataManager && typeof window.DataManager.converterParaEstruturaPlana === 'function') {
+                dadosPlanos = window.DataManager.converterParaEstruturaPlana(dados);
+            } else {
+                console.warn('DataManager não disponível para conversão. Tentando conversão simplificada.');
+                // Conversão simplificada (fallback)
+                dadosPlanos = {
+                    revenue: dados.empresa?.faturamento || 0,
+                    serviceCompany: dados.empresa?.tipoEmpresa === 'servicos',
+                    cumulativeRegime: dados.parametrosFiscais?.regimePisCofins === 'cumulativo',
+                    credits: dados.parametrosFiscais?.creditos || {}
+                };
+            }
+        } else {
+            // Já está em formato plano
+            dadosPlanos = dados;
+        }
+
+        return calcularTodosImpostosAtuais(dadosPlanos);
+    }
+
+    /**
      * Calcula o fluxo de caixa no regime tributário atual (pré-Split Payment)
      * 
-     * @param {Object} dados - Dados da empresa e parâmetros de simulação
+     * @param {Object} dados - Dados em formato plano para cálculos
      * @returns {Object} - Resultados detalhados do fluxo de caixa atual
      */
     function calcularFluxoCaixaAtual(dados) {
-        // Verificar se é uma chamada recursiva
-        const flags = arguments[1] || { isRecursiveCall: false };
+        // Verificar se os dados estão em formato plano
+        if (dados.empresa !== undefined || dados.cicloFinanceiro !== undefined) {
+            console.error('calcularFluxoCaixaAtual recebeu estrutura aninhada. Utilizando formato plano via DataManager.');
+            // Tentativa de conversão via DataManager
+            if (window.DataManager && typeof window.DataManager.converterParaEstruturaPlana === 'function') {
+                dados = window.DataManager.converterParaEstruturaPlana(dados);
+            } else {
+                throw new Error('Estrutura de dados incompatível e DataManager não disponível para conversão');
+            }
+        }
 
-        // Extrair parâmetros relevantes
-        const faturamento = dados.faturamento;
-        const aliquota = dados.aliquota;
-        const pmr = dados.pmr;
-        const percVista = dados.percVista;
-        const percPrazo = dados.percPrazo;
-        const creditos = dados.creditos || 0;
+        // Extrair e validar parâmetros críticos em formato plano
+        const faturamento = typeof dados.faturamento === 'number' && !isNaN(dados.faturamento) ? 
+                            Math.max(0, dados.faturamento) : 0;
+
+        const aliquota = typeof dados.aliquota === 'number' && !isNaN(dados.aliquota) ? 
+                        Math.max(0, Math.min(1, dados.aliquota)) : 0.265;
+
+        const pmr = typeof dados.pmr === 'number' && !isNaN(dados.pmr) ? 
+                    Math.max(0, dados.pmr) : 30;
+
+        const percVista = typeof dados.percVista === 'number' && !isNaN(dados.percVista) ? 
+                         Math.max(0, Math.min(1, dados.percVista)) : 0.3;
+
+        const percPrazo = typeof dados.percPrazo === 'number' && !isNaN(dados.percPrazo) ? 
+                         Math.max(0, Math.min(1, dados.percPrazo)) : 0.7;
+
+        const creditos = typeof dados.creditos === 'number' && !isNaN(dados.creditos) ? 
+                         Math.max(0, dados.creditos) : 0;
+
+        // Validar consistência de percentuais
+        if (Math.abs(percVista + percPrazo - 1) > 0.001) {
+            console.warn(`Soma dos percentuais de venda (${percVista} à vista + ${percPrazo} a prazo) não é 1. Normalizando.`);
+            // Normalizar para soma 1 mantendo proporção
+            const soma = percVista + percPrazo;
+            if (soma > 0) {
+                const percVistaNormalizado = percVista / soma;
+                const percPrazoNormalizado = percPrazo / soma;
+                // Usar valores normalizados nos cálculos
+            }
+        }
 
         // Cálculos do fluxo de caixa atual
         const valorImpostoTotal = faturamento * aliquota;
@@ -224,11 +363,11 @@ window.CurrentTaxSystem = (function() {
         // Benefício financeiro do capital em giro (em dias de faturamento)
         const beneficioDiasCapitalGiro = (capitalGiroImpostos / faturamento) * tempoMedioCapitalGiro;
 
-        // Cálculo dos impostos do sistema atual
+        // Cálculo dos impostos do sistema atual usando função especializada
         const impostos = calcularTodosImpostosAtuais({
             revenue: faturamento,
-            serviceCompany: dados.serviceCompany || false,
-            cumulativeRegime: dados.cumulativeRegime || false,
+            serviceCompany: dados.tipoEmpresa === 'servicos',
+            cumulativeRegime: dados.regimePisCofins === 'cumulativo',
             credits: {
                 pis: dados.creditosPIS || 0,
                 cofins: dados.creditosCOFINS || 0,
@@ -253,12 +392,53 @@ window.CurrentTaxSystem = (function() {
             impostos
         };
 
-        // Adicionar memória crítica apenas se não for chamada recursiva
-        if (!flags.isRecursiveCall) {
-            resultado.memoriaCritica = window.CalculationCore.gerarMemoriaCritica(dados, null, { isRecursiveCall: true });
+        // Adicionar memória crítica se o DataManager estiver disponível
+        if (window.DataManager && typeof window.DataManager.gerarMemoriaCritica === 'function') {
+            resultado.memoriaCritica = window.DataManager.gerarMemoriaCritica(dados);
         }
 
         return resultado;
+    }
+
+    /**
+     * Wrapper de compatibilidade para calcularFluxoCaixaAtual
+     * Aceita tanto estrutura aninhada quanto plana
+     * 
+     * @param {Object} dados - Dados da simulação (formato aninhado ou plano)
+     * @returns {Object} - Resultados detalhados do fluxo de caixa atual
+     */
+    function calcularFluxoCaixaAtualCompat(dados) {
+        // Verificar formato e converter se necessário
+        let dadosProcessamento;
+
+        if (dados.empresa !== undefined || dados.cicloFinanceiro !== undefined) {
+            // Dados em formato aninhado, converter para plano
+            if (window.DataManager && typeof window.DataManager.converterParaEstruturaPlana === 'function') {
+                dadosProcessamento = window.DataManager.converterParaEstruturaPlana(dados);
+            } else {
+                console.warn('DataManager não disponível para conversão. Tentando conversão simplificada.');
+                // Conversão simplificada (fallback)
+                dadosProcessamento = {
+                    faturamento: dados.empresa?.faturamento || 0,
+                    aliquota: dados.parametrosFiscais?.aliquota || 0.265,
+                    pmr: dados.cicloFinanceiro?.pmr || 30,
+                    percVista: dados.cicloFinanceiro?.percVista || 0.3,
+                    percPrazo: dados.cicloFinanceiro?.percPrazo || 0.7,
+                    creditos: dados.parametrosFiscais?.creditos?.total || 0,
+                    tipoEmpresa: dados.empresa?.tipoEmpresa || '',
+                    regimePisCofins: dados.parametrosFiscais?.regimePisCofins || 'cumulativo',
+                    creditosPIS: dados.parametrosFiscais?.creditos?.pis || 0,
+                    creditosCOFINS: dados.parametrosFiscais?.creditos?.cofins || 0,
+                    creditosICMS: dados.parametrosFiscais?.creditos?.icms || 0,
+                    creditosIPI: dados.parametrosFiscais?.creditos?.ipi || 0
+                };
+            }
+        } else {
+            // Já está em formato plano
+            dadosProcessamento = dados;
+        }
+
+        return calcularFluxoCaixaAtual(dadosProcessamento);
     }
 
     /**
@@ -324,17 +504,43 @@ window.CurrentTaxSystem = (function() {
     /**
      * Calcula o impacto do Split Payment na margem operacional
      * 
-     * @param {Object} dados - Dados da empresa e parâmetros de simulação
+     * @param {Object} dados - Dados em formato plano para cálculos
      * @param {number} diferencaCapitalGiro - Diferença no capital de giro
-     * @param {Object} flags - Flags de controle para evitar recursão (opcional)
      * @returns {Object} - Análise detalhada do impacto na margem operacional
      */
-    // Modificação em current-tax-system.js (linha ~325)
-    function calcularImpactoMargem(dados, diferencaCapitalGiro, flags = {}) {
-        // Extrair parâmetros relevantes
-        const faturamento = dados.faturamento || 0;
-        const margem = dados.margem || 0;
-        const taxaCapitalGiro = dados.taxaCapitalGiro || 0.021; // 2,1% a.m. é o padrão
+    function calcularImpactoMargem(dados, diferencaCapitalGiro) {
+        // Validar parâmetros críticos
+        if (typeof diferencaCapitalGiro !== 'number' || isNaN(diferencaCapitalGiro)) {
+            console.error('Diferença no capital de giro inválida para cálculo de impacto na margem');
+            diferencaCapitalGiro = 0;
+        }
+
+        // Verificar se os dados estão em formato plano
+        if (dados.empresa !== undefined || dados.parametrosFinanceiros !== undefined) {
+            console.warn('calcularImpactoMargem recebeu estrutura aninhada. Convertendo para formato plano.');
+            // Tentativa de conversão via DataManager
+            if (window.DataManager && typeof window.DataManager.converterParaEstruturaPlana === 'function') {
+                dados = window.DataManager.converterParaEstruturaPlana(dados);
+            } else {
+                console.warn('DataManager não disponível para conversão. Usando conversão simplificada.');
+                // Extrair diretamente (fallback)
+                dados = {
+                    faturamento: dados.empresa?.faturamento || 0,
+                    margem: dados.empresa?.margem || 0,
+                    taxaCapitalGiro: dados.parametrosFinanceiros?.taxaCapitalGiro || 0.021
+                };
+            }
+        }
+
+        // Extrair e validar parâmetros relevantes
+        const faturamento = typeof dados.faturamento === 'number' && !isNaN(dados.faturamento) ? 
+                            Math.max(0, dados.faturamento) : 0;
+
+        const margem = typeof dados.margem === 'number' && !isNaN(dados.margem) ? 
+                      Math.max(0, Math.min(1, dados.margem)) : 0;
+
+        const taxaCapitalGiro = typeof dados.taxaCapitalGiro === 'number' && !isNaN(dados.taxaCapitalGiro) ? 
+                               Math.max(0, dados.taxaCapitalGiro) : 0.021; // 2,1% a.m. é o padrão
 
         // Cálculo do custo mensal do capital de giro adicional
         const custoMensalCapitalGiro = Math.abs(diferencaCapitalGiro) * taxaCapitalGiro;
@@ -346,7 +552,7 @@ window.CurrentTaxSystem = (function() {
         const impactoPercentual = faturamento > 0 ? (custoMensalCapitalGiro / faturamento) * 100 : 0;
 
         // Cálculo da margem ajustada
-        const margemAjustada = margem - (impactoPercentual / 100);
+        const margemAjustada = Math.max(0, margem - (impactoPercentual / 100));
 
         // Percentual de redução da margem
         const percentualReducaoMargem = margem > 0 ? (impactoPercentual / (margem * 100)) * 100 : 0;
@@ -361,18 +567,15 @@ window.CurrentTaxSystem = (function() {
             percentualReducaoMargem
         };
 
-        // Adicione memória crítica apenas se não for chamada recursiva
-        if (!flags || !flags.isRecursiveCall) {
-            // Usar formatação segura aqui para evitar recursão
-            if (window.CalculationCore && typeof window.CalculationCore.gerarMemoriaCritica === 'function') {
-                try {
-                    resultado.memoriaCritica = window.CalculationCore.gerarMemoriaCritica(dados, null);
-                } catch (error) {
-                    console.warn('Erro ao gerar memória crítica:', error);
-                    resultado.memoriaCritica = {
-                        erro: 'Não foi possível gerar a memória crítica'
-                    };
-                }
+        // Gerar memória crítica via DataManager se disponível
+        if (window.DataManager && typeof window.DataManager.gerarMemoriaCritica === 'function') {
+            try {
+                resultado.memoriaCritica = window.DataManager.gerarMemoriaCritica(dados, {
+                    diferencaCapitalGiro: diferencaCapitalGiro,
+                    impactoMargem: resultado
+                });
+            } catch (error) {
+                console.warn('Erro ao gerar memória crítica:', error);
             }
         }
 
@@ -385,20 +588,27 @@ window.CurrentTaxSystem = (function() {
     function inicializarIntegracaoCalculos() {
         console.log('Inicializando integração com o módulo de cálculos...');
 
-        // Verificar se o módulo está disponível
-        if (typeof CalculationModule === 'undefined') {
+        // Verificar disponibilidade do DataManager
+        if (typeof window.DataManager === 'undefined') {
+            console.warn('DataManager não encontrado. Algumas funcionalidades podem ser limitadas.');
+        } else {
+            console.log('DataManager encontrado. Utilizando para validações e transformações de dados.');
+        }
+
+        // Verificar disponibilidade do módulo de cálculos
+        if (typeof window.CalculationModule === 'undefined') {
             console.error('Módulo de cálculos não encontrado. Algumas funcionalidades podem não funcionar corretamente.');
             return;
         }
 
         // Adicionar o módulo ao objeto window para garantir disponibilidade global
-        window.CalculationModule = CalculationModule;
+        window.CalculationModule = window.CalculationModule;
 
-        // Tentar integrar com o simulador, mas não falhar se não estiver disponível
+        // Tentar integrar com o simulador
         if (typeof window.SimuladorFluxoCaixa !== 'undefined') {
             integrarComSimulador();
         } else {
-            // Tentar novamente após um pequeno atraso para permitir que outros scripts carreguem
+            // Tentar novamente após um pequeno atraso
             setTimeout(function() {
                 if (typeof window.SimuladorFluxoCaixa !== 'undefined') {
                     integrarComSimulador();
@@ -410,12 +620,14 @@ window.CurrentTaxSystem = (function() {
     }
 
     /**
-     * Integra o módulo de cálculos com o simulador
+     * Integra o módulo de cálculos com o simulador, usando as funções adaptadas
+     * para a nova arquitetura de dados
      */
     function integrarComSimulador() {
         // Associar as funções de cálculo ao simulador
         if (window.SimuladorFluxoCaixa) {
-            window.SimuladorFluxoCaixa._calcularFluxoCaixaAtual = calcularFluxoCaixaAtual;
+            // Usar funções compat para garantir flexibilidade
+            window.SimuladorFluxoCaixa._calcularFluxoCaixaAtual = calcularFluxoCaixaAtualCompat;
             window.SimuladorFluxoCaixa._calcularFluxoCaixaSplitPayment = window.IVADualSystem.calcularFluxoCaixaSplitPayment;
             window.SimuladorFluxoCaixa._calcularImpactoCapitalGiro = window.IVADualSystem.calcularImpactoCapitalGiro;
             window.SimuladorFluxoCaixa._calcularProjecaoTemporal = window.IVADualSystem.calcularProjecaoTemporal;
@@ -427,35 +639,50 @@ window.CurrentTaxSystem = (function() {
     }
 
     /**
-     * Obtém dados do repositório
-     * @returns {Object} Dados obtidos do repositório
+     * Obtém dados do repositório, validando e normalizando via DataManager
+     * @returns {Object} Dados validados e normalizados do repositório
      */
     function obterDadosDoRepositorio() {
         // Verificar se o repositório está disponível
         if (typeof SimuladorRepository === 'undefined') {
             console.error('SimuladorRepository não está definido. Utilizando dados padrão.');
-            return {
+            // Dados padrão em formato aninhado
+            const dadosPadrao = {
                 empresa: { faturamento: 0, margem: 0 },
                 cicloFinanceiro: { pmr: 30, pmp: 30, pme: 30, percVista: 0.3, percPrazo: 0.7 },
                 parametrosFiscais: { aliquota: 0.265, creditos: 0 },
                 parametrosSimulacao: { cenario: 'moderado', taxaCrescimento: 0.05 }
             };
+
+            // Validar e normalizar, se DataManager estiver disponível
+            if (window.DataManager && typeof window.DataManager.validarENormalizar === 'function') {
+                return window.DataManager.validarENormalizar(dadosPadrao);
+            }
+
+            return dadosPadrao;
         }
 
         // Obter dados do repositório
-        return {
+        const dadosBrutos = {
             empresa: SimuladorRepository.obterSecao('empresa'),
             cicloFinanceiro: SimuladorRepository.obterSecao('cicloFinanceiro'),
             parametrosFiscais: SimuladorRepository.obterSecao('parametrosFiscais'),
             parametrosSimulacao: SimuladorRepository.obterSecao('parametrosSimulacao'),
             setoresEspeciais: SimuladorRepository.obterSecao('setoresEspeciais')
         };
+
+        // Validar e normalizar dados via DataManager, se disponível
+        if (window.DataManager && typeof window.DataManager.validarENormalizar === 'function') {
+            return window.DataManager.validarENormalizar(dadosBrutos);
+        }
+
+        return dadosBrutos;
     }
 
     /**
-     * Obtém uma seção específica do repositório
+     * Obtém uma seção específica do repositório, validando-a
      * @param {string} secao - Nome da seção a ser obtida
-     * @returns {Object} Dados da seção
+     * @returns {Object} Dados validados da seção
      */
     function obterSecao(secao) {
         if (typeof SimuladorRepository === 'undefined' || typeof SimuladorRepository.obterSecao !== 'function') {
@@ -463,7 +690,15 @@ window.CurrentTaxSystem = (function() {
             return {};
         }
 
-        return SimuladorRepository.obterSecao(secao);
+        // Obter dados brutos da seção
+        const dadosSecao = SimuladorRepository.obterSecao(secao);
+
+        // Validar e normalizar via DataManager, se disponível
+        if (window.DataManager && typeof window.DataManager.validarDadosSecao === 'function') {
+            return window.DataManager.validarDadosSecao(secao, dadosSecao);
+        }
+
+        return dadosSecao;
     }
 
     // Retornar o objeto com funções públicas
@@ -476,7 +711,9 @@ window.CurrentTaxSystem = (function() {
         calcularIPI,
         calcularISS,
         calcularTodosImpostosAtuais,
+        calcularTodosImpostosAtuaisCompat, // Nova função de compatibilidade
         calcularFluxoCaixaAtual,
+        calcularFluxoCaixaAtualCompat,     // Nova função de compatibilidade
         calcularAnaliseSensibilidade,
         calcularImpactoMargem,
         inicializarIntegracaoCalculos,

@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="css/tabs.css">
     <link rel="stylesheet" href="css/forms.css">
     <link rel="stylesheet" href="css/charts.css">
-    <link rel="stylesheet" href="css/modals.css">s
+    <link rel="stylesheet" href="css/modals.css">
 </head>
 <body>
     <div class="container">
@@ -345,13 +345,14 @@
 										<input type="number" id="ciclo-financeiro" value="30" readonly>
 									</div>
 								</div>
+								<!-- Elemento modificado -->
 								<div class="form-column">
 									<div class="form-group checkbox-group">
-										<input type="checkbox" id="considerar-split" name="considerar-split">
+										<input type="checkbox" id="considerar-split" name="considerar-split" checked>
 										<label for="considerar-split">Considerar Split Payment no cálculo</label>
 										<span class="tooltip">
 											<i class="info-icon">i</i>
-											<span class="tooltip-text">Ajusta o ciclo financeiro de acordo com o impacto do Split Payment, considerando o percentual de implementação do ano selecionado.</span>
+											<span class="tooltip-text">Se desabilitado, o simulador calculará o impacto da reforma tributária sem o mecanismo de Split Payment, considerando apenas a substituição dos impostos atuais pelo IVA Dual.</span>
 										</span>
 									</div>
 								</div>
@@ -446,6 +447,21 @@
 					<div class="panel">
 						<h3>Resultados da Simulação</h3>
 						<div id="resultados">
+						
+						<!-- Adicionar após <h3>Resultados da Simulação</h3> -->
+						<div class="year-selector">
+							<label for="ano-visualizacao">Ano de Visualização:</label>
+							<select id="ano-visualizacao" onchange="atualizarResultadosPorAno()">
+								<option value="2026">2026 (10%)</option>
+								<option value="2027">2027 (25%)</option>
+								<option value="2028">2028 (40%)</option>
+								<option value="2029">2029 (55%)</option>
+								<option value="2030">2030 (70%)</option>
+								<option value="2031">2031 (85%)</option>
+								<option value="2032">2032 (95%)</option>
+								<option value="2033">2033 (100%)</option>
+							</select>
+						</div>
 							<p class="text-muted">Preencha os dados e clique em "Simular" para visualizar os resultados.</p>
 
 							<!-- Resultados detalhados serão carregados aqui -->
@@ -571,8 +587,7 @@
 					</div>
 				</div>
 			</div>
-			</div>
-					
+			</div>					
 			
             <!-- Conteúdo da aba Configurações - manter o ID original -->
 			<div id="configuracoes" class="tab-content">
@@ -847,8 +862,7 @@
 				
 					</div>
 				</div>
-			</div>
-			
+			</div>	
 
             <!-- Aba de Estratégias de Mitigação -->
             <div id="estrategias" class="tab-content">
@@ -1309,6 +1323,7 @@
 	<!-- Primeiro os utilitários -->
 	<script src="js/utils/formatters.js"></script>
 	<script src="js/utils/validators.js"></script>
+	<script src="js/utils/data-manager.js"></script>
 	<script src="js/utils/export-tools.js"></script>
 	<script src="js/utils/currency-formatter.js"></script>
 
@@ -1715,8 +1730,10 @@
 					// Atualização de todos os campos
 					document.getElementById('aliquota').value = (aliquotaEfetiva * 100).toFixed(1);
 					document.getElementById('reducao').value = (reducaoEspecial * 100).toFixed(1);
-					document.getElementById('aliquota-cbs').value = aliquotaCbs;
-					document.getElementById('aliquota-ibs').value = aliquotaIbs;
+					//document.getElementById('aliquota-cbs').value = aliquotaCbs;
+					//document.getElementById('aliquota-ibs').value = aliquotaIbs;
+					document.getElementById('aliquota-cbs').value = parseFloat(aliquotaCbs).toFixed(1);
+					document.getElementById('aliquota-ibs').value = parseFloat(aliquotaIbs).toFixed(1);
 					document.getElementById('categoria-iva').value = categoriaIva;
 
 					// Log detalhado para debug
@@ -1994,6 +2011,10 @@
 			adicionarCSS();
 		}
 	})();
+		
+		document.addEventListener('DOMContentLoaded', function() {
+			TabsManager.inicializar();
+		});
 	</script>
 
 </body>

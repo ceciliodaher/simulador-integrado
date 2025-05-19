@@ -1,23 +1,30 @@
-// No início de current-tax-system.js e iva-dual-system.js
-// Inicializar o objeto se não existir
-window.CalculationCore = window.CalculationCore || {
-    formatarMoeda: function(valor) {
-        return typeof valor === 'number' ? 
-               'R$ ' + valor.toFixed(2).replace('.', ',') : 
-               'R$ 0,00';
-    },
-    formatarValorSeguro: function(valor) {
-        return typeof valor === 'number' ? 
-               'R$ ' + valor.toFixed(2).replace('.', ',') : 
-               'R$ 0,00';
-    },
-    calcularTempoMedioCapitalGiro: function(pmr, prazoRecolhimento, percVista, percPrazo) {
-        // Implementação fallback simplificada
-        const tempoVista = prazoRecolhimento;
-        const tempoPrazo = Math.max(0, prazoRecolhimento - pmr);
-        return (percVista * tempoVista) + (percPrazo * tempoPrazo);
-    }
-};
+/**
+ * Módulo de Cálculos do Sistema IVA Dual e Split Payment
+ * Fornece as funções relacionadas ao regime de Split Payment e IVA Dual
+ * 
+ * @author Expertzy Inteligência Tributária
+ * @version 2.0.0
+ */
+
+// Verificação de disponibilidade do DataManager
+if (typeof window.DataManager === 'undefined') {
+    console.error('DataManager não disponível. A funcionalidade do módulo IVADualSystem será limitada.');
+    
+    // Se não existir, cria um stub do DataManager para evitar erros
+    window.DataManager = {
+        converterParaEstruturaPlana: function(dados) { return dados; },
+        converterParaEstruturaAninhada: function(dados) { return dados; },
+        validarENormalizar: function(dados) { return dados; },
+        extrairValorNumerico: function(valor) { 
+            return typeof valor === 'number' ? valor : parseFloat(valor) || 0; 
+        },
+        formatarMoeda: function(valor) {
+            return typeof valor === 'number' ? 
+                   'R$ ' + valor.toFixed(2).replace('.', ',') : 
+                   'R$ 0,00';
+        }
+    };
+}
 
 // Adicione este código no início do arquivo iva-dual-system.js logo após a inicialização de window.CalculationCore
 window.CalculationCore.gerarMemoriaCritica = window.CalculationCore.gerarMemoriaCritica || function(dados, resultados = null, flags = {}) {
@@ -159,20 +166,42 @@ window.IVADualSystem = (function() {
     /**
      * Calcula o fluxo de caixa com o regime de Split Payment
      * 
-     * @param {Object} dados - Dados da empresa e parâmetros de simulação
+     * @param {Object} dados - Dados da empresa e parâmetros de simulação (formato plano)
      * @param {number} ano - Ano de referência para percentual de implementação
      * @param {Object} parametrosSetoriais - Parâmetros específicos do setor (opcional)
      * @returns {Object} - Resultados detalhados do fluxo de caixa com Split Payment
+     * @throws {Error} - Se os dados não estiverem em formato plano
      */
     function calcularFluxoCaixaSplitPayment(dados, ano = 2026, parametrosSetoriais = null) {
-        // Extrair parâmetros relevantes
-        const faturamento = dados.faturamento;
-        const aliquota = dados.aliquota;
-        const pmr = dados.pmr;
-        const percVista = dados.percVista;
-        const percPrazo = dados.percPrazo;
-        const creditos = dados.creditos || 0;
+        // Verificar se os dados estão em formato plano
+        if (dados.empresa !== undefined) {
+            throw new Error('calcularFluxoCaixaSplitPayment espera dados em formato plano. Use DataManager.converterParaEstruturaPlana()');
+        }
+
+        // Validar campos essenciais
+        if (typeof dados.faturamento !== 'number' || isNaN(dados.faturamento)) {
+            throw new Error('Faturamento inválido ou não informado');
+        }
+        if (typeof dados.aliquota !== 'number' || isNaN(dados.aliquota)) {
+            throw new Error('Alíquota inválida ou não informada');
+        }
+        if (typeof dados.pmr !== 'number' || isNaN(dados.pmr)) {
+            throw new Error('PMR inválido ou não informado');
+        }
+
+        // Extrair e normalizar parâmetros relevantes
+        const faturamento = window.DataManager.extrairValorNumerico(dados.faturamento);
+        const aliquota = dados.aliquota > 1 ? dados.aliquota / 100 : dados.aliquota; // Normalizar percentual
+        const pmr = Math.max(0, parseInt(dados.pmr) || 0);
+        const percVista = dados.percVista > 1 ? dados.percVista / 100 : dados.percVista;
+        const percPrazo = dados.percPrazo > 1 ? dados.percPrazo / 100 : dados.percPrazo;
+        const creditos = window.DataManager.extrairValorNumerico(dados.creditos) || 0;
         const compensacao = dados.compensacao || 'automatica';
+
+        // Verificar consistência de percentuais
+        if (Math.abs(percVista + percPrazo - 1) > 0.001) {
+            console.warn('A soma dos percentuais de vendas à vista e a prazo difere de 100%. Considerando proporcional.');
+        }
 
         // Obter percentual de implementação para o ano específico
         const percentualImplementacao = window.CurrentTaxSystem.obterPercentualImplementacao(ano, parametrosSetoriais);
@@ -198,38 +227,92 @@ window.IVADualSystem = (function() {
         // Prazo para recolhimento do imposto normal (não Split)
         const prazoRecolhimento = 25;
 
-        // Cálculo do tempo médio do capital em giro (apenas para a parcela não Split)
-        const tempoMedioCapitalGiro = window.CalculationCore.calcularTempoMedioCapitalGiro(pmr, prazoRecolhimento, percVista, percPrazo);
-
-        // Benefício financeiro do capital em giro (em dias de faturamento)
-        const beneficioDiasCapitalGiro = (capitalGiroDisponivel / faturamento) * tempoMedioCapitalGiro;
+        // Construir objeto de créditos para cálculo de impostos
+        const creditsObject = {
+            pis: dados.creditosPIS || 0,
+            cofins: dados.creditosCOFINS || 0,
+            icms: dados.creditosICMS || 0,
+            ipi: dados.creditosIPI || 0
+        };
 
         // Calcular impostos em ambos os sistemas
         const impostosAtuais = window.CurrentTaxSystem.calcularTodosImpostosAtuais({
             revenue: faturamento,
-            serviceCompany: dados.serviceCompany || false,
-            cumulativeRegime: dados.cumulativeRegime || false,
-            credits: {
-                pis: dados.creditosPIS || 0,
-                cofins: dados.creditosCOFINS || 0,
-                icms: dados.creditosICMS || 0,
-                ipi: dados.creditosIPI || 0
-            }
+            serviceCompany: dados.tipoEmpresa === 'servicos',
+            cumulativeRegime: dados.regimePisCofins === 'cumulativo',
+            credits: creditsObject
         });
+
+        // Calcular tempo médio do capital em giro (usando a versão do DataManager)
+        let tempoMedioCapitalGiro;
+        if (window.DataManager.calcularTempoMedioCapitalGiro) {
+            tempoMedioCapitalGiro = window.DataManager.calcularTempoMedioCapitalGiro(pmr, prazoRecolhimento, percVista, percPrazo);
+        } else {
+            // Cálculo in-line se a função do DataManager não estiver disponível
+            const tempoVista = prazoRecolhimento;
+            const tempoPrazo = Math.max(0, prazoRecolhimento - pmr);
+            tempoMedioCapitalGiro = (percVista * tempoVista) + (percPrazo * tempoPrazo);
+        }
+
+        // Benefício financeiro do capital em giro (em dias de faturamento)
+        const beneficioDiasCapitalGiro = faturamento > 0 ? 
+                                        (capitalGiroDisponivel / faturamento) * tempoMedioCapitalGiro : 0;
 
         // Se o ano estiver no período de transição para o IVA Dual, calcular impostos de transição
         let impostosIVA = null;
-        if (ano >= periodosTransicao.cbs.start) {
+        //if (ano >= periodosTransicao.cbs.start) {
+        // Substituir esta linha:
+        // if (ano >= periodosTransicao.cbs.start) {
+        // Por:
+        if (ano >= 2026) { // Para fins de simulação/demonstração
+            // Calcular os impostos do sistema IVA Dual
             // Calcular os impostos do sistema IVA Dual
             impostosIVA = calcularTotalIVA(
                 faturamento,
-                {}, // Usando alíquotas padrão
+                {
+                    cbs: dados.aliquotaCBS || aliquotasIVADual.cbs,
+                    ibs: dados.aliquotaIBS || aliquotasIVADual.ibs
+                },
                 {
                     cbs: dados.creditosCBS || 0,
                     ibs: dados.creditosIBS || 0
                 },
                 dados.categoriaIVA || 'standard'
             );
+        }
+
+        // Gerar memória crítica usando DataManager se disponível
+        let memoriaCritica;
+        try {
+            if (window.DataManager.gerarMemoriaCritica) {
+                memoriaCritica = window.DataManager.gerarMemoriaCritica({
+                    faturamento, 
+                    aliquota, 
+                    percVista, 
+                    percPrazo, 
+                    creditos,
+                    valorImpostoTotal,
+                    valorImpostoLiquido,
+                    percentualImplementacao
+                });
+            } else if (window.CalculationCore.gerarMemoriaCritica) {
+                memoriaCritica = window.CalculationCore.gerarMemoriaCritica(dados, null);
+            } else {
+                memoriaCritica = {
+                    tituloRegime: "Sistema de Split Payment",
+                    descricaoRegime: "Cálculo de impacto no fluxo de caixa",
+                    formula: "Valor do Imposto × Percentual de Implementação",
+                    passoAPasso: ["Cálculo executado com sucesso"],
+                    observacoes: []
+                };
+            }
+        } catch (erro) {
+            console.warn('Erro ao gerar memória crítica:', erro);
+            memoriaCritica = {
+                tituloRegime: "Sistema de Split Payment",
+                descricaoRegime: "Cálculo de impacto no fluxo de caixa",
+                erro: "Não foi possível gerar a memória crítica detalhada"
+            };
         }
 
         // Resultado completo
@@ -249,8 +332,17 @@ window.IVADualSystem = (function() {
             fluxoCaixaLiquido: recebimentoVista + recebimentoPrazo,
             impostosAtuais,
             impostosIVA,
-            memoriaCritica: window.CalculationCore.gerarMemoriaCritica(dados, null)
+            memoriaCritica
         };
+
+        // Registrar log de transformação se disponível no DataManager
+        if (window.DataManager.logTransformacao) {
+            window.DataManager.logTransformacao(
+                dados,
+                resultado,
+                'Cálculo de Fluxo de Caixa com Split Payment'
+            );
+        }
 
         return resultado;
     }
@@ -258,86 +350,224 @@ window.IVADualSystem = (function() {
     /**
      * Calcula o impacto do Split Payment no capital de giro
      * 
-     * @param {Object} dados - Dados da empresa e parâmetros de simulação
+     * @param {Object} dados - Dados da empresa e parâmetros de simulação (formato plano)
      * @param {number} ano - Ano de referência para percentual de implementação
      * @param {Object} parametrosSetoriais - Parâmetros específicos do setor (opcional)
      * @returns {Object} - Análise comparativa detalhada do impacto no capital de giro
+     * @throws {Error} - Se os dados não estiverem em formato plano
      */
-	function calcularImpactoCapitalGiro(dados, ano = 2026, parametrosSetoriais = null) {
-		// Adicionar proteção contra recursão
-		const flags = arguments[3] || { isRecursiveCall: false };
+    function calcularImpactoCapitalGiro(dados, ano = 2026, parametrosSetoriais = null) {
+        // Verificar se os dados estão em formato plano
+        if (dados.empresa !== undefined) {
+            throw new Error('calcularImpactoCapitalGiro espera dados em formato plano. Use DataManager.converterParaEstruturaPlana()');
+        }
 
-		// Se for uma chamada recursiva, calcular uma versão simplificada
-		if (flags.isRecursiveCall) {
-			const percentualImplementacao = window.CurrentTaxSystem.obterPercentualImplementacao(ano, parametrosSetoriais);
-			const valorImpostoTotal = dados.faturamento * dados.aliquota;
-			const diferencaCapitalGiro = -valorImpostoTotal * percentualImplementacao;
+        // Validar campos essenciais
+        if (typeof dados.faturamento !== 'number' || isNaN(dados.faturamento)) {
+            throw new Error('Faturamento inválido ou não informado');
+        }
+        if (typeof dados.aliquota !== 'number' || isNaN(dados.aliquota)) {
+            throw new Error('Alíquota inválida ou não informada');
+        }
 
-			return {
-				diferencaCapitalGiro,
-				percentualImpacto: -100 * percentualImplementacao,
-				necesidadeAdicionalCapitalGiro: Math.abs(diferencaCapitalGiro) * 1.2,
-				impactoDiasFaturamento: 15 * percentualImplementacao,
-				// Adicionado para evitar erros em referências posteriores
-				impactoMargem: { 
-					impactoPercentual: Math.abs(diferencaCapitalGiro) / dados.faturamento * 5,
-					custoAnualCapitalGiro: Math.abs(diferencaCapitalGiro) * (dados.taxaCapitalGiro || 0.021) * 12
-				}
-			};
-		}
+        // Determinar se é uma chamada recursiva ou inicial
+        const isRecursiveCall = arguments[3]?.isRecursiveCall || false;
 
-		// Calcular fluxo de caixa nos dois regimes
-		const resultadoAtual = window.CurrentTaxSystem.calcularFluxoCaixaAtual(dados, { isRecursiveCall: true });
-		const resultadoSplitPayment = calcularFluxoCaixaSplitPayment(dados, ano, parametrosSetoriais, { isRecursiveCall: true });
+        // Para chamadas recursivas, usar uma implementação simplificada
+        if (isRecursiveCall) {
+            return calcularImpactoCapitalGiroSimplificado(dados, ano, parametrosSetoriais);
+        }
 
-		// Calcular diferenças
-		const diferencaCapitalGiro = resultadoSplitPayment.capitalGiroDisponivel - resultadoAtual.capitalGiroDisponivel;
-		const percentualImpacto = resultadoAtual.capitalGiroDisponivel !== 0 ?
-		  (diferencaCapitalGiro / resultadoAtual.capitalGiroDisponivel) * 100 : 0;
+        // Adicionar esta verificação para considerar a opção de desabilitar o split-payment
+        const considerarSplitPayment = dados.splitPayment !== false; // Se não especificado, assume true
 
-		// Calcular necessidade adicional de capital de giro
-		const necesidadeAdicionalCapitalGiro = Math.abs(diferencaCapitalGiro) * 1.2;
+        try {
+            // Calcular fluxo de caixa nos dois regimes usando funções do sistema
+            const resultadoAtual = window.CurrentTaxSystem.calcularFluxoCaixaAtual(
+                dados, 
+                { isRecursiveCall: true }
+            );
 
-		// Impacto em dias de faturamento
-		const impactoDiasFaturamento = resultadoAtual.beneficioDiasCapitalGiro - resultadoSplitPayment.beneficioDiasCapitalGiro;
+            // Se split-payment não for considerado, usar apenas o regime atual para ambos
+            let resultadoSplitPayment;
+            if (considerarSplitPayment) {
+                resultadoSplitPayment = calcularFluxoCaixaSplitPayment(
+                    dados, 
+                    ano, 
+                    parametrosSetoriais, 
+                    { isRecursiveCall: true }
+                );
+            } else {
+                // Se não considerar split-payment, usar o regime atual como base, mas ajustar para o novo sistema tributário
+                resultadoSplitPayment = JSON.parse(JSON.stringify(resultadoAtual));
 
-		// Calcular impacto na margem operacional diretamente (sem chamar CurrentTaxSystem)
-		const taxaCapitalGiro = dados.taxaCapitalGiro || 0.021;
-		const custoMensalCapitalGiro = Math.abs(diferencaCapitalGiro) * taxaCapitalGiro;
-		const custoAnualCapitalGiro = custoMensalCapitalGiro * 12;
-		const impactoPercentual = dados.faturamento > 0 ? (custoMensalCapitalGiro / dados.faturamento) * 100 : 0;
-		const impactoMargem = {
-			custoMensalCapitalGiro,
-			custoAnualCapitalGiro,
-			impactoPercentual,
-			margemOriginal: dados.margem,
-			margemAjustada: dados.margem - (impactoPercentual / 100),
-			percentualReducaoMargem: dados.margem > 0 ? (impactoPercentual / (dados.margem * 100)) * 100 : 0
-		};
+                // Atualizar descrição para indicar que é sem Split Payment
+                resultadoSplitPayment.descricao = "Sistema IVA Dual sem Split Payment";
 
-		// Resultado completo
-		const resultado = {
-			ano,
-			resultadoAtual,
-			resultadoSplitPayment,
-			diferencaCapitalGiro,
-			percentualImpacto,
-			necesidadeAdicionalCapitalGiro,
-			impactoDiasFaturamento,
-			margemOperacionalOriginal: dados.margem,
-			margemOperacionalAjustada: dados.margem - (impactoPercentual / 100),
-			impactoMargem: impactoPercentual,
-			impactoMargemDetalhado: impactoMargem
-		};
+                // Aplicar apenas as mudanças do sistema tributário, sem o mecanismo de Split Payment
+                // Considerar a transição gradual das alíquotas
+                if (resultadoSplitPayment.impostos) {
+                    resultadoSplitPayment.impostos = calcularTransicaoIVADual(
+                        dados.faturamento, 
+                        ano, 
+                        resultadoSplitPayment.impostos,
+                        { parametrosSetoriais }
+                    );
+                }
+            }
 
-		// Apenas calcular analiseSensibilidade se não for chamada recursiva
-		if (!flags.isRecursiveCall) {
-			// Implementar uma versão simplificada da análise de sensibilidade aqui
-			resultado.analiseSensibilidade = calcularAnaliseSensibilidadeSimplificada(dados, ano, diferencaCapitalGiro);
-		}
+            // Validar resultados obtidos
+            if (!resultadoAtual || !resultadoSplitPayment) {
+                throw new Error('Erro ao calcular os fluxos de caixa necessários para a análise');
+            }
 
-		return resultado;
-	}
+            // Calcular diferenças de capital de giro
+            const diferencaCapitalGiro = resultadoSplitPayment.capitalGiroDisponivel - resultadoAtual.capitalGiroDisponivel;
+
+            // Calcular percentual de impacto, protegendo contra divisão por zero
+            let percentualImpacto = 0;
+            if (resultadoAtual.capitalGiroDisponivel !== 0) {
+                percentualImpacto = (diferencaCapitalGiro / resultadoAtual.capitalGiroDisponivel) * 100;
+            }
+
+            // Calcular necessidade adicional de capital de giro (com fator de segurança)
+            const fatorSeguranca = 1.2; // 20% de margem de segurança
+            const necesidadeAdicionalCapitalGiro = Math.abs(diferencaCapitalGiro) * fatorSeguranca;
+
+            // Impacto em dias de faturamento
+            const impactoDiasFaturamento = resultadoAtual.beneficioDiasCapitalGiro - resultadoSplitPayment.beneficioDiasCapitalGiro;
+
+            // Extrair e normalizar parâmetros para cálculo de impacto na margem
+            const faturamento = window.DataManager.extrairValorNumerico(dados.faturamento);
+            const margem = dados.margem > 1 ? dados.margem / 100 : dados.margem; // Normalizar percentual
+            const taxaCapitalGiro = dados.taxaCapitalGiro > 1 ? dados.taxaCapitalGiro / 100 : 
+                                   (dados.taxaCapitalGiro || 0.021); // Valor padrão: 2,1% a.m.
+
+            // Calcular impacto na margem operacional
+            const custoMensalCapitalGiro = Math.abs(diferencaCapitalGiro) * taxaCapitalGiro;
+            const custoAnualCapitalGiro = custoMensalCapitalGiro * 12;
+
+            // Calcular impacto percentual na margem, protegendo contra divisão por zero
+            let impactoPercentual = 0;
+            if (faturamento > 0) {
+                impactoPercentual = (custoMensalCapitalGiro / faturamento) * 100;
+            }
+
+            // Calcular margem ajustada
+            const margemAjustada = margem - (impactoPercentual / 100);
+
+            // Calcular percentual de redução da margem, protegendo contra divisão por zero
+            let percentualReducaoMargem = 0;
+            if (margem > 0) {
+                percentualReducaoMargem = (impactoPercentual / (margem * 100)) * 100;
+            }
+
+            // Criar objeto com impacto detalhado na margem
+            const impactoMargemDetalhado = {
+                custoMensalCapitalGiro,
+                custoAnualCapitalGiro,
+                impactoPercentual,
+                margemOriginal: margem,
+                margemAjustada,
+                percentualReducaoMargem
+            };
+
+            // Compilar o resultado completo
+            const resultado = {
+                ano,
+                resultadoAtual,
+                resultadoSplitPayment,
+                diferencaCapitalGiro,
+                percentualImpacto,
+                necesidadeAdicionalCapitalGiro,
+                impactoDiasFaturamento,
+                margemOperacionalOriginal: margem,
+                margemOperacionalAjustada: margemAjustada,
+                impactoMargem: impactoPercentual,
+                impactoMargemDetalhado,
+                splitPaymentConsiderado: considerarSplitPayment
+            };
+
+            // Adicionar análise de sensibilidade ao resultado
+            resultado.analiseSensibilidade = calcularAnaliseSensibilidadeSimplificada(
+                dados, 
+                ano, 
+                diferencaCapitalGiro
+            );
+
+            // Registrar log de transformação se disponível no DataManager
+            if (window.DataManager.logTransformacao) {
+                window.DataManager.logTransformacao(
+                    dados,
+                    resultado,
+                    'Cálculo de Impacto no Capital de Giro'
+                );
+            }
+
+            return resultado;
+
+        } catch (erro) {
+            console.error('Erro ao calcular impacto no capital de giro:', erro);
+
+            // Retornar uma versão simplificada em caso de erro
+            return calcularImpactoCapitalGiroSimplificado(dados, ano, parametrosSetoriais);
+        }
+    }
+
+    /**
+     * Versão simplificada do cálculo de impacto no capital de giro
+     * Utilizada em caso de chamada recursiva ou erro na implementação completa
+     * 
+     * @param {Object} dados - Dados da empresa e parâmetros de simulação
+     * @param {number} ano - Ano de referência
+     * @param {Object} parametrosSetoriais - Parâmetros específicos do setor (opcional)
+     * @returns {Object} - Análise simplificada do impacto
+     * @private
+     */
+    function calcularImpactoCapitalGiroSimplificado(dados, ano, parametrosSetoriais) {
+        // Extrair e normalizar parâmetros essenciais
+        const faturamento = window.DataManager.extrairValorNumerico(dados.faturamento) || 1;
+        const aliquota = dados.aliquota > 1 ? dados.aliquota / 100 : (dados.aliquota || 0.265);
+        const margem = dados.margem > 1 ? dados.margem / 100 : (dados.margem || 0.15);
+        const taxaCapitalGiro = dados.taxaCapitalGiro > 1 ? dados.taxaCapitalGiro / 100 : 
+                               (dados.taxaCapitalGiro || 0.021);
+
+        // Obter percentual de implementação
+        const percentualImplementacao = window.CurrentTaxSystem.obterPercentualImplementacao(
+            ano, 
+            parametrosSetoriais
+        );
+
+        // Cálculos simplificados
+        const valorImpostoTotal = faturamento * aliquota;
+        const diferencaCapitalGiro = -valorImpostoTotal * percentualImplementacao;
+        const necesidadeAdicionalCapitalGiro = Math.abs(diferencaCapitalGiro) * 1.2;
+        const impactoDiasFaturamento = 15 * percentualImplementacao;
+
+        // Impacto na margem
+        const custoMensalCapitalGiro = Math.abs(diferencaCapitalGiro) * taxaCapitalGiro;
+        const custoAnualCapitalGiro = custoMensalCapitalGiro * 12;
+        const impactoPercentual = (custoMensalCapitalGiro / faturamento) * 100;
+
+        // Resultado simplificado
+        return {
+            diferencaCapitalGiro,
+            percentualImpacto: -100 * percentualImplementacao,
+            necesidadeAdicionalCapitalGiro,
+            impactoDiasFaturamento,
+            margemOperacionalOriginal: margem,
+            margemOperacionalAjustada: margem - (impactoPercentual / 100),
+            impactoMargem: impactoPercentual,
+            impactoMargemDetalhado: {
+                custoMensalCapitalGiro,
+                custoAnualCapitalGiro,
+                impactoPercentual,
+                margemOriginal: margem,
+                margemAjustada: margem - (impactoPercentual / 100),
+                percentualReducaoMargem: margem > 0 ? (impactoPercentual / (margem * 100)) * 100 : 0
+            }
+        };
+    }
 
 	// Nova função para calcular análise de sensibilidade sem depender de CurrentTaxSystem
 	function calcularAnaliseSensibilidadeSimplificada(dados, ano, diferencaCapitalGiro) {
@@ -422,78 +652,178 @@ window.IVADualSystem = (function() {
     /**
      * Simula o impacto do Split Payment ao longo do período de transição
      * 
-     * @param {Object} dados - Dados da empresa e parâmetros de simulação
+     * @param {Object} dados - Dados da empresa e parâmetros de simulação (formato plano)
      * @param {number} anoInicial - Ano inicial da simulação (padrão: 2026)
      * @param {number} anoFinal - Ano final da simulação (padrão: 2033)
      * @param {string} cenarioTaxaCrescimento - Cenário de crescimento ('conservador', 'moderado', 'otimista', 'personalizado')
      * @param {number} taxaCrescimentoPersonalizada - Taxa de crescimento para cenário personalizado (decimal)
      * @param {Object} parametrosSetoriais - Parâmetros específicos do setor (opcional)
      * @returns {Object} - Projeção detalhada do impacto ao longo do tempo
+     * @throws {Error} - Se os dados não estiverem em formato plano ou se parâmetros forem inválidos
      */
-    // Substituir a implementação atual por esta versão sem dependência circular
     function calcularProjecaoTemporal(dados, anoInicial = 2026, anoFinal = 2033, cenarioTaxaCrescimento = 'moderado', taxaCrescimentoPersonalizada = null, parametrosSetoriais = null) {
-        // Definir taxa de crescimento com base no cenário
+        // Verificar se os dados estão em formato plano
+        if (dados.empresa !== undefined) {
+            throw new Error('calcularProjecaoTemporal espera dados em formato plano. Use DataManager.converterParaEstruturaPlana()');
+        }
+
+        // Validar dados essenciais
+        if (typeof dados.faturamento !== 'number' || isNaN(dados.faturamento) || dados.faturamento <= 0) {
+            throw new Error('Faturamento inválido ou não positivo');
+        }
+
+        // Validar intervalo de anos
+        if (anoInicial < 2026 || anoFinal > 2033 || anoInicial > anoFinal) {
+            throw new Error('Intervalo de anos inválido. O período deve estar entre 2026 e 2033, com ano inicial menor que o final.');
+        }
+
+        // Normalizar e validar cenário
+        const cenarioValido = ['conservador', 'moderado', 'otimista', 'personalizado'].includes(cenarioTaxaCrescimento);
+        if (!cenarioValido) {
+            console.warn(`Cenário '${cenarioTaxaCrescimento}' inválido. Utilizando 'moderado' como padrão.`);
+            cenarioTaxaCrescimento = 'moderado';
+        }
+
+        // Determinar taxa de crescimento com base no cenário
         let taxaCrescimento = 0.05; // Padrão: moderado (5% a.a.)
 
-        if (cenarioTaxaCrescimento === 'conservador') {
-            taxaCrescimento = 0.02; // 2% a.a.
-        } else if (cenarioTaxaCrescimento === 'otimista') {
-            taxaCrescimento = 0.08; // 8% a.a.
-        } else if (cenarioTaxaCrescimento === 'personalizado' && taxaCrescimentoPersonalizada !== null) {
-            taxaCrescimento = taxaCrescimentoPersonalizada;
+        switch (cenarioTaxaCrescimento) {
+            case 'conservador':
+                taxaCrescimento = 0.02; // 2% a.a.
+                break;
+            case 'otimista':
+                taxaCrescimento = 0.08; // 8% a.a.
+                break;
+            case 'personalizado':
+                // Validar taxa personalizada
+                if (taxaCrescimentoPersonalizada !== null && 
+                    typeof taxaCrescimentoPersonalizada === 'number' && 
+                    !isNaN(taxaCrescimentoPersonalizada)) {
+                    // Normalizar percentual, se necessário
+                    taxaCrescimento = taxaCrescimentoPersonalizada > 1 ? 
+                                      taxaCrescimentoPersonalizada / 100 : 
+                                      taxaCrescimentoPersonalizada;
+                } else {
+                    console.warn('Taxa de crescimento personalizada inválida. Utilizando 5% (moderado) como padrão.');
+                }
+                break;
         }
 
-        // Inicializar resultados
-        const resultadosAnuais = {};
-        const impactoAcumulado = {
-            totalNecessidadeCapitalGiro: 0,
-            custoFinanceiroTotal: 0,
-            impactoMedioMargem: 0
-        };
+        try {
+            // Inicializar estruturas para resultados
+            const resultadosAnuais = {};
+            const impactoAcumulado = {
+                totalNecessidadeCapitalGiro: 0,
+                custoFinanceiroTotal: 0,
+                impactoMedioMargem: 0
+            };
 
-        let dadosAno = {...dados};
-        let somaImpactoMargem = 0;
+            // Criar cópia dos dados para manipulação
+            let dadosAno = JSON.parse(JSON.stringify(dados));
+            let somaImpactoMargem = 0;
 
-        // Simular cada ano
-        for (let ano = anoInicial; ano <= anoFinal; ano++) {
-            // Calcular impacto para o ano
-            const impactoAno = calcularImpactoCapitalGiro(dadosAno, ano, parametrosSetoriais);
+            // Simular cada ano do período
+            for (let ano = anoInicial; ano <= anoFinal; ano++) {
+                // Calcular impacto para o ano atual
+                const impactoAno = calcularImpactoCapitalGiro(dadosAno, ano, parametrosSetoriais);
 
-            // Adicionar ao acumulado
-            resultadosAnuais[ano] = impactoAno;
-            impactoAcumulado.totalNecessidadeCapitalGiro += impactoAno.necesidadeAdicionalCapitalGiro;
-            impactoAcumulado.custoFinanceiroTotal += impactoAno.impactoMargemDetalhado.custoAnualCapitalGiro;
-            somaImpactoMargem += impactoAno.impactoMargem;
+                // Armazenar resultado do ano
+                resultadosAnuais[ano] = impactoAno;
 
-            // Atualizar faturamento para o próximo ano
-            dadosAno = {
-                ...dadosAno,
-                faturamento: dadosAno.faturamento * (1 + taxaCrescimento)
+                // Acumular valores para análise global
+                impactoAcumulado.totalNecessidadeCapitalGiro += impactoAno.necesidadeAdicionalCapitalGiro;
+                impactoAcumulado.custoFinanceiroTotal += impactoAno.impactoMargemDetalhado.custoAnualCapitalGiro;
+                somaImpactoMargem += impactoAno.impactoMargem;
+
+                // Atualizar faturamento para o próximo ano com a taxa de crescimento
+                dadosAno.faturamento = dadosAno.faturamento * (1 + taxaCrescimento);
+
+                // Arredondar para evitar erros de precisão de ponto flutuante
+                dadosAno.faturamento = Math.round(dadosAno.faturamento * 100) / 100;
+            }
+
+            // Calcular impacto médio na margem ao longo do período
+            const numAnos = anoFinal - anoInicial + 1;
+            impactoAcumulado.impactoMedioMargem = somaImpactoMargem / numAnos;
+
+            // Gerar memória crítica usando DataManager se disponível
+            let memoriaCritica;
+            try {
+                if (window.DataManager.gerarMemoriaCritica) {
+                    memoriaCritica = window.DataManager.gerarMemoriaCritica({
+                        faturamento: dados.faturamento, 
+                        cenario: cenarioTaxaCrescimento,
+                        taxaCrescimento,
+                        anoInicial,
+                        anoFinal,
+                        totalNecessidadeCapitalGiro: impactoAcumulado.totalNecessidadeCapitalGiro,
+                        custoFinanceiroTotal: impactoAcumulado.custoFinanceiroTotal
+                    });
+                } else if (window.CalculationCore.gerarMemoriaCritica) {
+                    memoriaCritica = window.CalculationCore.gerarMemoriaCritica(dados, null);
+                } else {
+                    memoriaCritica = {
+                        tituloRegime: "Projeção Temporal do Split Payment",
+                        descricaoRegime: "Simulação de impacto ao longo do tempo",
+                        formula: "Impacto Ano N = Impacto Base × Crescimento^N × % Implementação Ano N",
+                        passoAPasso: ["Projeção calculada com sucesso"],
+                        observacoes: []
+                    };
+                }
+            } catch (erro) {
+                console.warn('Erro ao gerar memória crítica da projeção:', erro);
+                memoriaCritica = {
+                    tituloRegime: "Projeção Temporal do Split Payment",
+                    descricaoRegime: "Simulação de impacto ao longo do tempo",
+                    erro: "Não foi possível gerar a memória crítica detalhada"
+                };
+            }
+
+            // Montar resultado completo
+            const resultado = {
+                parametros: {
+                    anoInicial,
+                    anoFinal,
+                    cenarioTaxaCrescimento,
+                    taxaCrescimento
+                },
+                resultadosAnuais,  // Resultados para cada ano individualmente
+                impactoAcumulado,
+                memoriaCritica
+            };
+
+            // Registrar log de transformação se disponível no DataManager
+            if (window.DataManager.logTransformacao) {
+                window.DataManager.logTransformacao(
+                    dados,
+                    resultado,
+                    'Projeção Temporal do Impacto do Split Payment'
+                );
+            }
+
+            return resultado;
+
+        } catch (erro) {
+            console.error('Erro ao calcular projeção temporal:', erro);
+
+            // Retornar resultado parcial em caso de erro
+            return {
+                parametros: {
+                    anoInicial,
+                    anoFinal,
+                    cenarioTaxaCrescimento,
+                    taxaCrescimento
+                },
+                erro: `Falha na projeção: ${erro.message}`,
+                impactoAcumulado: {
+                    totalNecessidadeCapitalGiro: dados.faturamento * dados.aliquota * 5, // Estimativa grosseira
+                    custoFinanceiroTotal: dados.faturamento * dados.aliquota * 5 * 0.021 * 12, // Estimativa grosseira
+                    impactoMedioMargem: 0.5 // Valor aproximado
+                }
             };
         }
-
-        // Calcular impacto médio na margem
-        const numAnos = anoFinal - anoInicial + 1;
-        impactoAcumulado.impactoMedioMargem = somaImpactoMargem / numAnos;
-
-        // IMPORTANTE: Não chamar calcularAnaliseElasticidade aqui
-
-        // Resultado completo
-        const resultado = {
-            parametros: {
-                anoInicial,
-                anoFinal,
-                cenarioTaxaCrescimento,
-                taxaCrescimento
-            },
-            resultadosAnuais,
-            impactoAcumulado,
-            memoriaCritica: window.CalculationCore.gerarMemoriaCritica(dados, null)
-        };
-
-        return resultado;
     }
-
+    
     /**
      * Calcula o impacto do Split Payment no ciclo financeiro da empresa
      * 
@@ -1345,36 +1675,35 @@ window.IVADualSystem = (function() {
      * @param {Object} [options] - Opções adicionais para o cálculo
      * @returns {Object} Resultado do cálculo na transição
      */
+    // Atualizar a função calcularTransicaoIVADual para considerar o ano de 2026
     function calcularTransicaoIVADual(baseValue, year, currentTaxes, options = {}) {
         const result = { ...currentTaxes };
 
-        // Determinar em qual fase da transição estamos
-        let percentualCBS = 0;
-        let percentualIBS = 0;
+        // Determinar percentual de implementação com base no ano
+        let percentualImplementacao = obterPercentualImplementacao(year, options.parametrosSetoriais);
 
-        // Transição do CBS (substitui PIS/COFINS)
-        if (year >= periodosTransicao.cbs.start) {
+        // Mesmo em 2026, permitir simulação com as alíquotas iniciais de teste
+        // Percentual CBS (aplicável a partir de 2026 com 0,9%)
+        let percentualCBS = 0;
+        if (year >= 2026) {
             if (year >= periodosTransicao.cbs.end) {
                 // CBS totalmente implementado
-                percentualCBS = 1;
+                percentualCBS = percentualImplementacao;
             } else {
                 // Durante a transição do CBS
-                const anosCBS = periodosTransicao.cbs.end - periodosTransicao.cbs.start;
-                const anosDecorridosCBS = year - periodosTransicao.cbs.start;
-                percentualCBS = anosDecorridosCBS / anosCBS;
+                percentualCBS = percentualImplementacao * 0.9/26.5; // Alíquota inicial de 0,9% ajustada para o total
             }
         }
 
-        // Transição do IBS (substitui ICMS/ISS)
-        if (year >= periodosTransicao.ibs.start) {
+        // Percentual IBS (aplicável a partir de 2026 com 0,1%)
+        let percentualIBS = 0;
+        if (year >= 2026) {
             if (year >= periodosTransicao.ibs.end) {
                 // IBS totalmente implementado
-                percentualIBS = 1;
+                percentualIBS = percentualImplementacao;
             } else {
                 // Durante a transição do IBS
-                const anosIBS = periodosTransicao.ibs.end - periodosTransicao.ibs.start;
-                const anosDecorridosIBS = year - periodosTransicao.ibs.start;
-                percentualIBS = anosDecorridosIBS / anosIBS;
+                percentualIBS = percentualImplementacao * 0.1/26.5; // Alíquota inicial de 0,1% ajustada para o total
             }
         }
 
@@ -1460,26 +1789,119 @@ window.IVADualSystem = (function() {
             }
         };
     }
+    
+    /**
+     * Converte dados do simulador entre estruturas aninhadas e planas
+     * Funciona como adaptador entre a interface e o módulo de cálculo
+     * 
+     * @param {Object} dados - Dados a serem convertidos (formato aninhado ou plano)
+     * @param {string} formatoDestino - Formato de destino ('plano' ou 'aninhado')
+     * @returns {Object} - Dados convertidos no formato especificado
+     * @throws {Error} - Se o formato de destino for inválido
+     */
+    function converterDadosSimulador(dados, formatoDestino) {
+        // Verificar disponibilidade do DataManager
+        if (typeof window.DataManager === 'undefined') {
+            console.warn('DataManager não disponível. Retornando dados sem conversão.');
+            return dados;
+        }
 
-    // Exportar API pública
+        // Determinar formato atual dos dados
+        const formatoAtual = dados.empresa !== undefined ? 'aninhado' : 'plano';
+
+        // Se já estiver no formato desejado, retornar sem conversão
+        if (formatoAtual === formatoDestino) {
+            return dados;
+        }
+
+        // Converter conforme necessário
+        if (formatoDestino === 'plano') {
+            return window.DataManager.converterParaEstruturaPlana(dados);
+        } else if (formatoDestino === 'aninhado') {
+            return window.DataManager.converterParaEstruturaAninhada(dados);
+        } else {
+            throw new Error(`Formato de destino inválido: ${formatoDestino}. Use 'plano' ou 'aninhado'.`);
+        }
+    }
+
+    /**
+     * Função wrapper para simulação de impacto do Split Payment
+     * Converte automaticamente os dados para o formato adequado e valida a entrada
+     * 
+     * @param {Object} dadosEntrada - Dados de entrada (pode estar em formato aninhado ou plano)
+     * @param {number} ano - Ano da simulação
+     * @param {Object} parametrosSetoriais - Parâmetros específicos do setor (opcional)
+     * @returns {Object} - Resultado da simulação em formato aninhado
+     */
+    function simularImpactoSplitPayment(dadosEntrada, ano = 2026, parametrosSetoriais = null) {
+        try {
+            // Verificar se os dados foram fornecidos
+            if (!dadosEntrada) {
+                throw new Error('Dados de entrada não fornecidos para simulação');
+            }
+
+            // Determinar formato dos dados de entrada
+            const formatoEntrada = dadosEntrada.empresa !== undefined ? 'aninhado' : 'plano';
+
+            // Validar e normalizar dados se estiverem em formato aninhado
+            let dadosValidados = dadosEntrada;
+            if (formatoEntrada === 'aninhado' && window.DataManager.validarENormalizar) {
+                dadosValidados = window.DataManager.validarENormalizar(dadosEntrada);
+            }
+
+            // Converter para formato plano se necessário
+            const dadosPlanos = formatoEntrada === 'aninhado' ? 
+                               converterDadosSimulador(dadosValidados, 'plano') : 
+                               dadosValidados;
+
+            // Executar simulação
+            const resultadoPlano = calcularImpactoCapitalGiro(dadosPlanos, ano, parametrosSetoriais);
+
+            // Converter resultado de volta para formato aninhado
+            const resultadoAninhado = window.DataManager.converterParaEstruturaAninhada ? 
+                                     window.DataManager.converterParaEstruturaAninhada(resultadoPlano) : 
+                                     resultadoPlano;
+
+            // Registrar log de transformação se disponível
+            if (window.DataManager.logTransformacao) {
+                window.DataManager.logTransformacao(
+                    dadosEntrada,
+                    resultadoAninhado,
+                    'Simulação Completa de Impacto do Split Payment'
+                );
+            }
+
+            return resultadoAninhado;
+
+        } catch (erro) {
+            console.error('Erro na simulação de impacto do Split Payment:', erro);
+            throw erro;
+        }
+    }
+
+    // Retornar o objeto com funções públicas
     return {
         // Constantes e configurações
         aliquotasIVADual,
         periodosTransicao,
-        
+
+        // Interface principal com validação e conversão de dados
+        simularImpactoSplitPayment,    // Função principal para uso externo
+        converterDadosSimulador,       // Utilitário para conversão entre formatos
+
         // Funções de cálculo de tributos
         calcularCBS,
         calcularIBS,
         calcularTotalIVA,
         calcularTransicaoIVADual,
-        
-        // Funções de análise de fluxo de caixa
+
+        // Funções de análise de fluxo de caixa (uso interno)
         calcularFluxoCaixaSplitPayment,
         calcularImpactoCapitalGiro,
         calcularNecessidadeAdicionalCapital,
         calcularProjecaoTemporal,
         calcularImpactoCicloFinanceiro,
-        
+
         // Funções de análise de estratégias
         calcularEfeitividadeMitigacao,
         calcularEfeitividadeAjustePrecos,
@@ -1490,9 +1912,20 @@ window.IVADualSystem = (function() {
         calcularEfeitividadeMeiosPagamento,
         calcularEfeitividadeCombinada,
         identificarCombinacaoOtima,
-        
+
         // Funções utilitárias
         compareResults,
-        gerarCombinacoes
+        gerarCombinacoes,
+
+        // Verificador de compatibilidade com a arquitetura
+        verificarCompatibilidadeArquitetura: function() {
+            return {
+                status: typeof window.DataManager !== 'undefined',
+                dataManagerDisponivel: typeof window.DataManager !== 'undefined',
+                versaoArquitetura: '2.0.0',
+                funcoesPlanas: true, // Este módulo usa funções que operam com estrutura plana
+                conversorImplementado: true // Este módulo implementa conversores
+            };
+        }
     };
 })();
