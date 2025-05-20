@@ -549,10 +549,52 @@ const SimuladorFluxoCaixa = {
                 parseInt(dadosPlanos.dataInicial?.split('-')[0], 10) || 2026
             );
 
-            // 5. Calcular efetividade das estratégias
+            // Filter for active strategies
+            const activeStrategies = {};
+            let anyStrategyActive = false;
+            if (estrategiasConfiguradas) { // Ensure estrategiasConfiguradas is not null/undefined
+                for (const key in estrategiasConfiguradas) {
+                    if (estrategiasConfiguradas.hasOwnProperty(key) && estrategiasConfiguradas[key].ativar === true) {
+                        activeStrategies[key] = estrategiasConfiguradas[key];
+                        anyStrategyActive = true;
+                    }
+                }
+            }
+
+            // Handle case where no strategies are active
+            if (!anyStrategyActive) {
+                const divResultados = document.getElementById('resultados-estrategias');
+                if (divResultados) {
+                    divResultados.innerHTML = '<p class="text-muted">Nenhuma estratégia de mitigação foi selecionada para simulação. Ative uma ou mais estratégias e simule novamente.</p>';
+                }
+                
+                // Clear or update the strategies chart
+                if (typeof window.ChartManager !== 'undefined' && 
+                    typeof window.ChartManager.renderizarGraficoEstrategias === 'function') {
+                    // Pass null for strategy results, but impactoBase might still be relevant for context
+                    window.ChartManager.renderizarGraficoEstrategias(null, impactoBase); 
+                }
+                
+                console.log('Simulação de estratégias concluída: Nenhuma estratégia ativa.');
+                return { 
+                    semEstrategiasAtivas: true,
+                    mensagem: "Nenhuma estratégia ativa.",
+                    efeitividadeCombinada: { 
+                        efetividadePercentual: 0, 
+                        mitigacaoTotal: 0, 
+                        custoTotal: 0, 
+                        custoBeneficio: 0 
+                    },
+                    detalhesPorEstrategia: {}
+                    // This structure should be compatible with downstream UI updates.
+                    // It mirrors the expected structure from calcularEfeitividadeMitigacao.
+                };
+            }
+
+            // 5. Calcular efetividade das estratégias (using activeStrategies)
             const resultadoEstrategias = window.IVADualSystem.calcularEfeitividadeMitigacao(
                 dadosPlanos,
-                estrategiasConfiguradas,
+                activeStrategies, // Changed from estrategiasConfiguradas
                 parseInt(dadosPlanos.dataInicial?.split('-')[0], 10) || 2026
             );
 
