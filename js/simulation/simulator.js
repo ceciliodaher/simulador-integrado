@@ -594,7 +594,7 @@ const SimuladorFluxoCaixa = {
             // 5. Calcular efetividade das estratégias (using activeStrategies)
             const resultadoEstrategias = window.IVADualSystem.calcularEfeitividadeMitigacao(
                 dadosPlanos,
-                activeStrategies, // Changed from estrategiasConfiguradas
+                activeStrategies, // Ensure this is the filtered list of active strategies
                 parseInt(dadosPlanos.dataInicial?.split('-')[0], 10) || 2026
             );
 
@@ -607,18 +607,40 @@ const SimuladorFluxoCaixa = {
                 // Detalhar impacto das estratégias
                 html += '<div class="estrategias-resumo">';
                 html += `<p><strong>Impacto Original:</strong> ${window.CalculationCore.formatarMoeda(Math.abs(impactoBase.diferencaCapitalGiro))}</p>`;
-                html += `<p><strong>Efetividade da Mitigação:</strong> ${resultadoEstrategias.efeitividadeCombinada.efetividadePercentual.toFixed(1)}%</p>`;
-                html += `<p><strong>Impacto Mitigado:</strong> ${window.CalculationCore.formatarMoeda(resultadoEstrategias.efeitividadeCombinada.mitigacaoTotal)}</p>`;
-                html += `<p><strong>Impacto Residual:</strong> ${window.CalculationCore.formatarMoeda(Math.abs(impactoBase.diferencaCapitalGiro) - resultadoEstrategias.efeitividadeCombinada.mitigacaoTotal)}</p>`;
+                // Ensure 'resultadoEstrategias.efeitividadeCombinada' exists and has the expected properties
+                if (resultadoEstrategias && resultadoEstrategias.efeitividadeCombinada) {
+                    html += `<p><strong>Efetividade da Mitigação:</strong> ${resultadoEstrategias.efeitividadeCombinada.efetividadePercentual.toFixed(1)}%</p>`;
+                    html += `<p><strong>Impacto Mitigado:</strong> ${window.CalculationCore.formatarMoeda(resultadoEstrategias.efeitividadeCombinada.mitigacaoTotal)}</p>`;
+                    html += `<p><strong>Impacto Residual:</strong> ${window.CalculationCore.formatarMoeda(Math.abs(impactoBase.diferencaCapitalGiro) - resultadoEstrategias.efeitividadeCombinada.mitigacaoTotal)}</p>`;
+                } else {
+                    html += '<p class="text-danger">Erro: Dados de efetividade combinada não disponíveis.</p>';
+                }
                 html += '</div>';
 
                 // Mostrar custo das estratégias
                 html += '<div class="estrategias-custo">';
-                html += `<p><strong>Custo Total das Estratégias:</strong> ${window.CalculationCore.formatarMoeda(resultadoEstrategias.efeitividadeCombinada.custoTotal)}</p>`;
-                html += `<p><strong>Relação Custo-Benefício:</strong> ${resultadoEstrategias.efeitividadeCombinada.custoBeneficio.toFixed(2)}</p>`;
+                if (resultadoEstrategias && resultadoEstrategias.efeitividadeCombinada) {
+                    html += `<p><strong>Custo Total das Estratégias:</strong> ${window.CalculationCore.formatarMoeda(resultadoEstrategias.efeitividadeCombinada.custoTotal)}</p>`;
+                    html += `<p><strong>Relação Custo-Benefício:</strong> ${resultadoEstrategias.efeitividadeCombinada.custoBeneficio.toFixed(2)}</p>`;
+                } else {
+                    html += '<p class="text-danger">Erro: Dados de custo das estratégias não disponíveis.</p>';
+                }
                 html += '</div>';
 
+                // **** START EXACT LOGGING TO BE ADDED/VERIFIED ****
+                console.log("SIMULATOR.JS: [LOG ATIVADO] Conteúdo HTML gerado para resultados das estratégias:", html);
+                // **** END EXACT LOGGING ****
+
                 divResultados.innerHTML = html;
+
+                // **** START EXACT LOGGING TO BE ADDED/VERIFIED ****
+                console.log("SIMULATOR.JS: [LOG ATIVADO] divResultados.innerHTML atribuído com sucesso.");
+                // **** END EXACT LOGGING ****
+
+            } else {
+                // **** START EXACT LOGGING TO BE ADDED/VERIFIED ****
+                console.error("SIMULATOR.JS: [LOG ATIVADO] Elemento #resultados-estrategias não encontrado no DOM!");
+                // **** END EXACT LOGGING ****
             }
 
             // 7. Atualizar gráfico de estratégias
