@@ -98,6 +98,123 @@ h1 {
     margin-bottom: 20px;
 }
 
+/* Estilos para o alerta de limpeza de cache */
+.cache-alert-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+.cache-alert-box {
+    background-color: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.cache-alert-header {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #f5c6cb;
+}
+
+.cache-alert-header h3 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.close-alert {
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.cache-alert-content {
+    padding: 20px;
+}
+
+.shortcut-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin: 20px 0;
+    justify-content: space-around;
+}
+
+.shortcut-item {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 10px;
+    background-color: #f9f9f9;
+    min-width: 170px;
+    text-align: center;
+}
+
+.shortcut-os {
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #0056b3;
+}
+
+.shortcut-keys {
+    margin: 5px 0;
+}
+
+.shortcut-alt {
+    font-size: 0.8em;
+    color: #666;
+    margin: 2px 0;
+}
+
+kbd {
+    background-color: #eee;
+    border-radius: 3px;
+    border: 1px solid #b4b4b4;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+    color: #333;
+    display: inline-block;
+    font-size: 0.85em;
+    font-family: monospace;
+    padding: 2px 5px;
+    margin: 0 2px;
+}
+
+.cache-alert-note {
+    font-style: italic;
+    color: #666;
+    margin-top: 15px;
+}
+
+.proceed-btn {
+    display: block;
+    margin: 20px auto 0;
+    padding: 10px 20px;
+    background-color: #0056b3;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.proceed-btn:hover {
+    background-color: #003d82;
+}
+
 /* Layouts */
 .grid {
     display: grid;
@@ -509,4 +626,60 @@ button:hover {
     background-color: #fff3cd;
     border: 1px solid #ffeeba;
     color: #856404;
+}
+
+/* Estilo para o banner BETA */
+.beta-banner {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(45deg, #ff0000, #ff7700, #ffed00, #00ff55, #0066ff, #8000ff);
+    background-size: 600% 600%;
+    color: white;
+    font-weight: bold;
+    padding: 8px 15px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    z-index: 9999;
+    transform: rotate(10deg);
+    animation: betaPulse 2s infinite alternate, betaBackground 10s ease infinite;
+    font-size: 18px;
+}
+
+@keyframes betaPulse {
+    0% { transform: rotate(10deg) scale(1); }
+    100% { transform: rotate(10deg) scale(1.1); }
+}
+
+@keyframes betaBackground {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* Estilo para o rodapé atualizado */
+.footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background-color: #f5f5f5;
+    border-top: 1px solid #ddd;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+.footer-contact {
+    font-size: 0.9em;
+    color: #555;
+}
+
+.footer-contact a {
+    color: #0056b3;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.footer-contact a:hover {
+    text-decoration: underline;
 }
