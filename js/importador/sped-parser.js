@@ -21,9 +21,11 @@ const SpedParser = (function() {
             '0110': parseRegistro0110,
             'M100': parseRegistroM100,
             'M105': parseRegistroM105,
+            'M200': parseRegistroM200, // Adicionar registro de débito PIS
             'M210': parseRegistroM210,
             'M500': parseRegistroM500,
             'M505': parseRegistroM505,
+            'M600': parseRegistroM600, // Adicionar registro de débito COFINS
             'M400': parseRegistroM400,
             'M800': parseRegistroM800
         },
@@ -91,14 +93,17 @@ const SpedParser = (function() {
             empresa: {},
             documentos: [],
             itens: [],
+            itensAnaliticos: [],
             impostos: {},
             creditos: {},
+            debitos: {}, // Adicionar esta propriedade para armazenar débitos
             regimes: {},
             ajustes: {},
             receitasNaoTributadas: {},
             balancoPatrimonial: [],
             demonstracaoResultado: [],
             lancamentosContabeis: [],
+            partidasLancamento: [],
             calculoImposto: {}
         };
 
@@ -330,26 +335,39 @@ const SpedParser = (function() {
     // Funções de parsing para cada tipo de registro
 
     function parseRegistro0000(campos) {
+        // Garantir valores não nulos e realizar verificações de qualidade
+        const cnpj = campos[7] || '';
+        const nome = campos[8] || '';
+
+        // Validação básica - CNPJ e Nome não podem ser vazios simultaneamente
+        if (!cnpj && !nome) {
+            console.warn('Registro 0000 com dados de empresa incompletos');
+        }
+
         return {
             tipo: 'empresa',
-            cnpj: campos[7],
-            nome: campos[8],
-            ie: campos[10],
-            municipio: campos[11],
-            uf: campos[12],
-            codMunicipio: campos[14]
+            cnpj: cnpj,
+            nome: nome, // Garantir que o nome seja extraído corretamente
+            ie: campos[10] || '',
+            municipio: campos[11] || '',
+            uf: campos[12] || '',
+            codMunicipio: campos[14] || ''
         };
     }
 
     function parseRegistro0000Contribuicoes(campos) {
+        // Garantir valores não nulos e realizar verificações de qualidade
+        const cnpj = campos[7] || '';
+        const nome = campos[8] || '';
+
         return {
             tipo: 'empresa',
-            cnpj: campos[7],
-            nome: campos[8],
-            ie: campos[10],
-            municipio: campos[11],
-            uf: campos[12],
-            regimeTributacao: campos[16]
+            cnpj: cnpj,
+            nome: nome, // Garantir que o nome seja extraído corretamente
+            ie: campos[10] || '',
+            municipio: campos[11] || '',
+            uf: campos[12] || '',
+            regimeTributacao: campos[16] || ''
         };
     }
 
@@ -464,6 +482,38 @@ const SpedParser = (function() {
             valorBaseCreditoTotal: parseFloat(campos[4].replace(',', '.')),
             aliquotaPis: parseFloat(campos[5].replace(',', '.')),
             valorCredito: parseFloat(campos[6].replace(',', '.'))
+        };
+    }
+    
+    function parseRegistroM200(campos) {
+        if (campos.length < 14) {
+            console.warn('Registro M200 (PIS) com estrutura incompleta');
+            return null;
+        }
+
+        return {
+            tipo: 'debito',
+            categoria: 'pis',
+            valorTotalContribuicao: parseFloat(campos[10]?.replace(',', '.') || '0'),
+            valorTotalRetencoes: parseFloat(campos[11]?.replace(',', '.') || '0'),
+            valorTotalDeducoes: parseFloat(campos[12]?.replace(',', '.') || '0'),
+            valorTotalPago: parseFloat(campos[13]?.replace(',', '.') || '0')
+        };
+    }
+
+    function parseRegistroM600(campos) {
+        if (campos.length < 14) {
+            console.warn('Registro M600 (COFINS) com estrutura incompleta');
+            return null;
+        }
+
+        return {
+            tipo: 'debito',
+            categoria: 'cofins',
+            valorTotalContribuicao: parseFloat(campos[10]?.replace(',', '.') || '0'),
+            valorTotalRetencoes: parseFloat(campos[11]?.replace(',', '.') || '0'),
+            valorTotalDeducoes: parseFloat(campos[12]?.replace(',', '.') || '0'),
+            valorTotalPago: parseFloat(campos[13]?.replace(',', '.') || '0')
         };
     }
 
@@ -720,6 +770,13 @@ const SpedParser = (function() {
                     resultado.impostos[dados.categoria] = [];
                 }
                 resultado.impostos[dados.categoria].push(dados);
+                break;
+            case 'debito':
+                if (!resultado.debitos) resultado.debitos = {};
+                if (!resultado.debitos[dados.categoria]) {
+                    resultado.debitos[dados.categoria] = [];
+                }
+                resultado.debitos[dados.categoria].push(dados);
                 break;
             case 'credito':
             case 'credito_detalhe':

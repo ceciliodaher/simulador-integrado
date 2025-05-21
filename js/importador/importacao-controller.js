@@ -254,6 +254,7 @@ const ImportacaoController = (function() {
             itensAnaliticos: [],
             impostos: {},
             creditos: {},
+            debitos: {}, // Adicionar para garantir estrutura correta
             regimes: {},
             ajustes: {},
             receitasNaoTributadas: {},
@@ -280,10 +281,14 @@ const ImportacaoController = (function() {
                 combinado.metadados.arquivosProcessados.push(resultado.metadados);
             }
 
-            // Dados da empresa (preferência para o primeiro arquivo com dados completos)
+            // Dados da empresa - prioriza o que tem nome preenchido
             if (resultado.empresa && Object.keys(resultado.empresa).length > 0) {
-                // Dá preferência para arquivo com mais informações
-                if (Object.keys(combinado.empresa).length < Object.keys(resultado.empresa).length) {
+                const nomeEmpresaAtual = resultado.empresa.nome || '';
+                const nomeEmpresaExistente = combinado.empresa.nome || '';
+
+                // Prioriza resultado com nome da empresa preenchido
+                if (nomeEmpresaAtual && (!nomeEmpresaExistente || 
+                     Object.keys(combinado.empresa).length < Object.keys(resultado.empresa).length)) {
                     combinado.empresa = {...resultado.empresa};
                 }
             }
@@ -686,6 +691,26 @@ const ImportacaoController = (function() {
             campoAliquotaIss.value = (parametrosFiscais.aliquotaIss * 100).toFixed(1);
             campoAliquotaIss.dispatchEvent(new Event('input'));
         }
+        
+        // Adicionar preenchimento dos campos de débitos, se existirem no formulário
+        const camposDebitos = [
+            { id: 'debitos-pis-calc', valor: parametrosFiscais.debitos?.pis || 0 },
+            { id: 'debitos-cofins-calc', valor: parametrosFiscais.debitos?.cofins || 0 },
+            { id: 'debitos-icms-calc', valor: parametrosFiscais.debitos?.icms || 0 },
+            { id: 'debitos-ipi-calc', valor: parametrosFiscais.debitos?.ipi || 0 }
+        ];
+
+        camposDebitos.forEach(campo => {
+            const elemento = document.getElementById(campo.id);
+            if (elemento) {
+                if (typeof window.CurrencyFormatter !== 'undefined' && 
+                    typeof window.CurrencyFormatter.formatarValorMonetario === 'function') {
+                    elemento.value = window.CurrencyFormatter.formatarValorMonetario(campo.valor * 100);
+                } else {
+                    elemento.value = formatarMoeda(campo.valor);
+                }
+            }
+        });
 
         // Atualiza os campos de créditos calculados
         calcularCreditosTributarios();

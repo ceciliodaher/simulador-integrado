@@ -213,6 +213,11 @@ const SpedExtractor = (function() {
      * @returns {string} Tipo de empresa (comercio, industria, servicos)
      */
     function determinarTipoEmpresa(dadosSped) {
+        // Verificação direta de registros de IPI (forte indicativo de indústria)
+        if (dadosSped.impostos && dadosSped.impostos.ipi && dadosSped.impostos.ipi.length > 0) {
+            return 'industria';
+        }
+
         // Se tiver informação da ECF, prioriza
         if (dadosSped.ecf && dadosSped.ecf.dados && dadosSped.ecf.dados.cnae) {
             const cnae = dadosSped.ecf.dados.cnae;
@@ -235,7 +240,7 @@ const SpedExtractor = (function() {
             }
         }
 
-        // Alternativa: análise dos CFOPs
+        // Alternativa: análise dos CFOPs - Lista expandida
         const itens = dadosSped.itens || [];
         const cfops = new Set();
 
@@ -246,24 +251,58 @@ const SpedExtractor = (function() {
             }
         });
 
-        // CFOPs típicos de cada atividade
-        const cfopsIndustria = ['5101', '5102', '5401', '5402', '6101', '6102', '6401', '6402'];
-        const cfopsServicos = ['5933', '5932', '5933', '6933', '6932', '9301', '9302'];
+        // CFOPs típicos de indústria - Lista expandida
+        const cfopsIndustria = [
+            // Industrialização própria
+            '5101', '5102', '5103', '5104', '5105', '5106', '5109',
+            '6101', '6102', '6103', '6104', '6105', '6106', '6109',
+            // Industrialização por encomenda
+            '5124', '5125', '6124', '6125',
+            // Retorno de industrialização
+            '5901', '5902', '6901', '6902',
+            // Venda de produto industrializado
+            '5401', '5402', '5403', '5405',
+            '6401', '6402', '6403', '6404', '6405'
+        ];
+
+        const cfopsServicos = [
+            '5933', '5932', '5933', '6933', '6932', '9301', '9302',
+            // Serviços de transporte e comunicação
+            '5301', '5302', '5303', '5304', '5305', '5306', '5307',
+            '6301', '6302', '6303', '6304', '6305', '6306', '6307'
+        ];
 
         let countIndustria = 0;
         let countServicos = 0;
         let countComercio = 0;
 
         cfops.forEach(cfop => {
-            if (cfopsIndustria.includes(cfop)) countIndustria++;
-            else if (cfopsServicos.includes(cfop)) countServicos++;
-            else if (cfop.startsWith('5') || cfop.startsWith('6')) countComercio++;
+            if (cfopsIndustria.includes(cfop)) {
+                countIndustria += 2; // Peso maior para CFOPs industriais
+            } else if (cfopsServicos.includes(cfop)) {
+                countServicos++;
+            } else if (cfop.startsWith('5') || cfop.startsWith('6')) {
+                countComercio++;
+            }
         });
 
-        // Determina tipo predominante
-        if (countIndustria > countComercio && countIndustria > countServicos) {
+        // Verificação de títulos de itens/produtos que sugerem fabricação
+        const termosFabricacao = ['produzido', 'fabricado', 'manufaturado', 'produção própria'];
+        let countItensProducaoPropria = 0;
+
+        (dadosSped.itens || []).forEach(item => {
+            const descricao = (item.descricao || '').toLowerCase();
+            if (termosFabricacao.some(termo => descricao.includes(termo))) {
+                countItensProducaoPropria += 2; // Peso maior para itens de produção própria
+            }
+        });
+
+        countIndustria += countItensProducaoPropria;
+
+        // Determina tipo predominante com prioridade para indústria
+        if (countIndustria > 0 && countIndustria >= Math.max(countComercio, countServicos)) {
             return 'industria';
-        } else if (countServicos > countComercio && countServicos > countIndustria) {
+        } else if (countServicos > countComercio) {
             return 'servicos';
         } else {
             return 'comercio';
@@ -362,6 +401,7 @@ const SpedExtractor = (function() {
     function extrairParametrosFiscais(dadosSped) {
         const impostos = dadosSped.impostos || {};
         const creditos = dadosSped.creditos || {};
+        const debitos = dadosSped.debitos || {}; // Adicionar referência aos débitos
         const regimeTributario = determinarRegimeTributario(dadosSped);
         const ajustes = dadosSped.ajustes || {};
         const itensAnaliticos = dadosSped.itensAnaliticos || [];
@@ -389,6 +429,12 @@ const SpedExtractor = (function() {
                 ipi: calcularCreditosIPI(dadosSped),
                 cbs: 0, // Não aplicável ainda
                 ibs: 0  // Não aplicável ainda
+            },
+            debitos: {  // Adicionar objeto de débitos
+                pis: calcularDebitosPIS(dadosSped),
+                cofins: calcularDebitosCOFINS(dadosSped),
+                icms: calcularDebitosICMS(dadosSped),
+                ipi: calcularDebitosIPI(dadosSped)
             },
             possuiIncentivoICMS: incentivosICMS.possuiIncentivo,
             percentualIncentivoICMS: incentivosICMS.percentualReducao / 100, // Converter para decimal
@@ -891,6 +937,74 @@ const SpedExtractor = (function() {
         }
 
         return valorCreditos;
+    }
+    
+    /**
+     * Calcula débitos de PIS
+     * @param {Object} dadosSped - Dados SPED
+     * @returns {number} Valor dos débitos de PIS
+     */
+    function calcularDebitosPIS(dadosSped) {
+        let valorDebitos = 0;
+
+        if (dadosSped.debitos && dadosSped.debitos.pis) {
+            dadosSped.debitos.pis.forEach(debito => {
+                valorDebitos += debito.valorTotalContribuicao || 0;
+            });
+        }
+
+        return valorDebitos;
+    }
+
+    /**
+     * Calcula débitos de COFINS
+     * @param {Object} dadosSped - Dados SPED
+     * @returns {number} Valor dos débitos de COFINS
+     */
+    function calcularDebitosCOFINS(dadosSped) {
+        let valorDebitos = 0;
+
+        if (dadosSped.debitos && dadosSped.debitos.cofins) {
+            dadosSped.debitos.cofins.forEach(debito => {
+                valorDebitos += debito.valorTotalContribuicao || 0;
+            });
+        }
+
+        return valorDebitos;
+    }
+
+    /**
+     * Calcula débitos de ICMS
+     * @param {Object} dadosSped - Dados SPED
+     * @returns {number} Valor dos débitos de ICMS
+     */
+    function calcularDebitosICMS(dadosSped) {
+        let valorDebitos = 0;
+
+        if (dadosSped.impostos && dadosSped.impostos.icms) {
+            dadosSped.impostos.icms.forEach(apuracao => {
+                valorDebitos += apuracao.valorTotalDebitos || 0;
+            });
+        }
+
+        return valorDebitos;
+    }
+
+    /**
+     * Calcula débitos de IPI
+     * @param {Object} dadosSped - Dados SPED
+     * @returns {number} Valor dos débitos de IPI
+     */
+    function calcularDebitosIPI(dadosSped) {
+        let valorDebitos = 0;
+
+        if (dadosSped.impostos && dadosSped.impostos.ipi) {
+            dadosSped.impostos.ipi.forEach(apuracao => {
+                valorDebitos += apuracao.valorTotalDebitos || 0;
+            });
+        }
+
+        return valorDebitos;
     }
 
     /**
