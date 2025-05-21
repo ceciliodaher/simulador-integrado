@@ -73,17 +73,51 @@ class PDFExporter extends BaseExporter {
             return Promise.reject('jsPDF not available');
         }
 
-        // Check simulation data
-        if (!window.ultimaSimulacao) {
-            alert('No simulation performed yet');
-            return Promise.reject('Simulation not performed');
+        // Validar a estrutura dos dados de entrada
+        if (!simulation) {
+            // Tentar obter da ultima simulação realizada
+            if (!window.DataManager || !window.ultimaSimulacao) {
+                alert('No simulation performed yet');
+                return Promise.reject('Simulation not performed');
+            }
+
+            simulation = window.ultimaSimulacao;
         }
 
+        // Validar a estrutura usando o DataManager
         try {
+            // Garantir que estamos usando a estrutura aninhada (canônica)
+            let dadosSimulacao;
+            if (simulation.dados && simulation.dados.empresa !== undefined) {
+                // Já está no formato aninhado
+                dadosSimulacao = window.DataManager.validarENormalizar(simulation.dados);
+            } else if (simulation.empresa !== undefined) {
+                // É uma estrutura aninhada direta
+                dadosSimulacao = window.DataManager.validarENormalizar(simulation);
+            } else {
+                // Provavelmente está em formato plano, converter
+                dadosSimulacao = window.DataManager.converterParaEstruturaAninhada(simulation);
+            }
+
+            // Garantir que os resultados existem e estão em formato adequado
+            let resultadosSimulacao;
+            if (simulation.resultados) {
+                resultadosSimulacao = simulation.resultados;
+            } else if (simulation.impactoBase) {
+                // Os resultados já estão no nível raiz
+                resultadosSimulacao = simulation;
+            } else {
+                throw new Error('Estrutura de resultados inválida');
+            }
+
             // Get export results from any location
-            const resultadosExportacao = window.ultimaSimulacao.resultadosExportacao || 
-                                      (window.ultimaSimulacao.resultados && 
-                                       window.ultimaSimulacao.resultados.resultadosExportacao);
+            const resultadosExportacao = resultadosSimulacao.resultadosExportacao || 
+                                      (resultadosSimulacao && 
+                                       resultadosSimulacao.resultadosExportacao);
+
+            if (!resultadosExportacao) {
+                console.warn('Resultados para exportação não encontrados. Utilizando resultados brutos.');
+            }
 
             // Request filename from user
             const manager = new ExportManager();
@@ -115,7 +149,7 @@ class PDFExporter extends BaseExporter {
             const margins = this.config.pdf.margins;
 
             // Add cover page
-            this._addCover(doc, window.ultimaSimulacao.dados || {}, pageCount);
+            this._addCover(doc, dadosSimulacao, pageCount);
             doc.addPage();
             pageCount++;
 
@@ -125,15 +159,15 @@ class PDFExporter extends BaseExporter {
             pageCount++;
 
             // Add simulation parameters
-            currentPositionY = this._addSimulationParameters(doc, window.ultimaSimulacao.dados || {}, pageCount);
+            currentPositionY = this._addSimulationParameters(doc, dadosSimulacao, pageCount);
             doc.addPage();
             pageCount++;
 
             // Add simulation results - robust version
             currentPositionY = this._addRobustSimulationResults(
                 doc, 
-                window.ultimaSimulacao, 
-                resultadosExportacao,
+                simulation, 
+                resultadosExportacao || resultadosSimulacao,
                 pageCount
             );
             doc.addPage();
@@ -147,8 +181,8 @@ class PDFExporter extends BaseExporter {
             // Add strategy analysis - with existence check
             currentPositionY = this._addRobustStrategyAnalysis(
                 doc, 
-                window.ultimaSimulacao.dados || {}, 
-                window.ultimaSimulacao, 
+                dadosSimulacao, 
+                resultadosSimulacao, 
                 pageCount
             );
             doc.addPage();
@@ -168,11 +202,11 @@ class PDFExporter extends BaseExporter {
             pageCount++;
 
             // Add conclusion
-            const equivalentRates = window.ultimaSimulacao.aliquotasEquivalentes || {};
+            const equivalentRates = simulation.aliquotasEquivalentes || {};
             currentPositionY = this._addRobustConclusion(
                 doc, 
-                window.ultimaSimulacao.dados || {}, 
-                window.ultimaSimulacao, 
+                dadosSimulacao, 
+                resultadosSimulacao, 
                 pageCount, 
                 equivalentRates
             );
@@ -208,7 +242,7 @@ class PDFExporter extends BaseExporter {
 
         // Fundo gradiente sutil na capa
         this._drawGradient(doc, 0, 0, pageWidth, pageHeight, [240, 240, 240], [220, 220, 220]);
-        
+
         let currentY = 50;
 
         // Logo
@@ -240,11 +274,11 @@ class PDFExporter extends BaseExporter {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(24);
         doc.setTextColor(this.config.pdf.colors.primary[0], this.config.pdf.colors.primary[1], this.config.pdf.colors.primary[2]);
-        
+
         const tituloPrincipal = 'RELATÓRIO DE SIMULAÇÃO';
         doc.text(tituloPrincipal, pageWidth / 2, currentY, { align: 'center' });
         currentY += 10;
-        
+
         const subtitulo = 'IMPACTO DO SPLIT PAYMENT NO FLUXO DE CAIXA';
         doc.text(subtitulo, pageWidth / 2, currentY, { align: 'center' });
         currentY += 30;
@@ -252,35 +286,78 @@ class PDFExporter extends BaseExporter {
         // Informações da empresa
         doc.setFontSize(14);
         doc.setTextColor(60, 60, 60);
-        
-        const regimeText = data.regime ? 
-            (data.regime === 'real' ? 'Lucro Real' : 
-             data.regime === 'presumido' ? 'Lucro Presumido' : 'Simples Nacional') : '';
-             
-        const setorText = data.setor ? data.setor.charAt(0).toUpperCase() + data.setor.slice(1) : '';
-        
+
+        // Utilizar os formatos padronizados e consistentes do DataManager
+        const formatadorManager = new ExportManager();
+
+        // Obter regimes de forma segura
+        const regimeMap = {
+            'real': 'Lucro Real',
+            'presumido': 'Lucro Presumido',
+            'simples': 'Simples Nacional'
+        };
+
+        let regimeText = '';
+        if (data && data.empresa && data.empresa.regime) {
+            regimeText = regimeMap[data.empresa.regime] || data.empresa.regime || '';
+        }
+
+        // Obter setor (usando DataManager para obter setores)
+        let setorText = '';
+        if (data && data.empresa && data.empresa.setor) {
+            // Tentar obter o setor formatado do repositório de setores se disponível
+            if (window.SetoresRepository && typeof window.SetoresRepository.obterSetor === 'function') {
+                const setor = window.SetoresRepository.obterSetor(data.empresa.setor);
+                if (setor && setor.nome) {
+                    setorText = setor.nome;
+                } else {
+                    setorText = formatadorManager.capitalizeFirstLetter(data.empresa.setor);
+                }
+            } else {
+                setorText = formatadorManager.capitalizeFirstLetter(data.empresa.setor);
+            }
+        }
+
+        // Montar informações da empresa
         const infoText = [
-            `Empresa: ${data.empresa || 'N/A'}`,
-            `Setor: ${setorText}`,
-            `Regime Tributário: ${regimeText}`,
+            `Empresa: ${data?.empresa?.nome || 'N/A'}`,
+            `Setor: ${setorText || 'N/A'}`,
+            `Regime Tributário: ${regimeText || 'N/A'}`,
             `Data: ${new Date().toLocaleDateString('pt-BR')}`
         ];
-        
+
         infoText.forEach(text => {
+            doc.setFont("helvetica", "bold");
             doc.text(text, pageWidth / 2, currentY, { align: 'center' });
+            doc.setFont("helvetica", "normal");
             currentY += 10;
         });
-        
+
         currentY += 30;
 
         // Detalhes do simulador
         doc.setFontSize(10);
         doc.setTextColor(100, 100, 100);
-        
-        const anoInicial = data.anoInicial || 2026;
-        const anoFinal = data.anoFinal || 2033;
+
+        // Obter anos do cronograma usando DataManager
+        let anoInicial = '';
+        let anoFinal = '';
+
+        if (data && data.parametrosSimulacao) {
+            if (data.parametrosSimulacao.dataInicial) {
+                anoInicial = data.parametrosSimulacao.dataInicial.split('-')[0] || '2026';
+            }
+
+            if (data.parametrosSimulacao.dataFinal) {
+                anoFinal = data.parametrosSimulacao.dataFinal.split('-')[0] || '2033';
+            }
+        }
+
+        if (!anoInicial) anoInicial = '2026';
+        if (!anoFinal) anoFinal = '2033';
+
         const detailText = `Simulação para o período ${anoInicial} - ${anoFinal}`;
-        
+
         doc.text(detailText, pageWidth / 2, currentY, { align: 'center' });
 
         // Rodapé da capa
@@ -288,10 +365,10 @@ class PDFExporter extends BaseExporter {
         doc.setFontSize(8);
         doc.setFont("helvetica", "italic");
         doc.setTextColor(100, 100, 100);
-        
+
         doc.text('© 2025 Expertzy Inteligência Tributária', pageWidth / 2, footerY, { align: 'center' });
         doc.text('Confidencial - Uso Interno', pageWidth / 2, footerY + 5, { align: 'center' });
-        
+
         return doc;
     }
 
@@ -356,6 +433,24 @@ class PDFExporter extends BaseExporter {
         doc.line(margins.left, currentY, pageWidth - margins.right, currentY);
         currentY += 10;
 
+        // Inicializar formatador para usar métodos padronizados
+        const manager = new ExportManager();
+
+        // Formatadores para usar métodos consistentes
+        const formatCurrency = (valor) => {
+            if (typeof window.DataManager !== 'undefined' && typeof window.DataManager.formatarMoeda === 'function') {
+                return window.DataManager.formatarMoeda(valor);
+            }
+            return manager.formatCurrency(valor);
+        };
+
+        const formatPercentage = (valor) => {
+            if (typeof window.DataManager !== 'undefined' && typeof window.DataManager.formatarPercentual === 'function') {
+                return window.DataManager.formatarPercentual(valor * 100);
+            }
+            return manager.formatPercentage(valor * 100);
+        };
+
         // Seção 1.1 - Dados da Empresa
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
@@ -368,16 +463,37 @@ class PDFExporter extends BaseExporter {
         doc.setFontSize(11);
         doc.setTextColor(0, 0, 0);
 
-        const manager = new ExportManager();
+        // Obter valores da estrutura canônica
+        let nomeEmpresa = data?.empresa?.nome || 'N/A';
+
+        let setor = 'N/A';
+        if (data?.empresa?.setor) {
+            // Tentar obter o setor formatado do repositório
+            if (window.SetoresRepository && typeof window.SetoresRepository.obterSetor === 'function') {
+                const setorObj = window.SetoresRepository.obterSetor(data.empresa.setor);
+                if (setorObj && setorObj.nome) {
+                    setor = setorObj.nome;
+                } else {
+                    setor = manager.capitalizeFirstLetter(data.empresa.setor);
+                }
+            } else {
+                setor = manager.capitalizeFirstLetter(data.empresa.setor);
+            }
+        }
+
+        // Regime tributário formatado
+        let regimeTributario = manager.getTaxRegimeFormatted(data?.empresa?.regime || '');
+
+        // Faturamento e margem com validação de tipo
+        const faturamento = typeof data?.empresa?.faturamento === 'number' ? formatCurrency(data.empresa.faturamento) : 'N/A';
+        const margem = typeof data?.empresa?.margem === 'number' ? formatPercentage(data.empresa.margem) : 'N/A';
+
         const dadosEmpresa = [
-            { label: "Empresa:", valor: data.empresa || "N/A" },
-            { label: "Setor:", valor: data.setor ? manager.capitalizeFirstLetter(data.setor) : "N/A" },
-            { label: "Regime Tributário:", valor: manager.getTaxRegimeFormatted(data.regime) || "N/A" },
-            { 
-                label: "Faturamento Mensal:",
-                valor: "R$ " + (typeof data.faturamento === "number" ? data.faturamento.toLocaleString("pt-BR") : "N/A")
-            },
-            { label: "Margem Operacional:", valor: ((data.margem || 0) * 100) + "%" }
+            { label: "Empresa:", valor: nomeEmpresa },
+            { label: "Setor:", valor: setor },
+            { label: "Regime Tributário:", valor: regimeTributario },
+            { label: "Faturamento Mensal:", valor: faturamento },
+            { label: "Margem Operacional:", valor: margem }
         ];
 
         dadosEmpresa.forEach(item => {
@@ -402,15 +518,33 @@ class PDFExporter extends BaseExporter {
         doc.setFontSize(11);
         doc.setTextColor(0, 0, 0);
 
+        // Obter valores da estrutura canônica
+        const aliquota = typeof data?.parametrosFiscais?.aliquota === 'number' ? 
+            formatPercentage(data.parametrosFiscais.aliquota) : 'N/A';
+
+        const reducaoEspecial = typeof data?.ivaConfig?.reducaoEspecial === 'number' ? 
+            formatPercentage(data.ivaConfig.reducaoEspecial) : 'N/A';
+
+        const tipoOperacao = data?.parametrosFiscais?.tipoOperacao || 'N/A';
+
+        // Créditos com validação
+        let creditosTotais = 0;
+        if (data?.parametrosFiscais?.creditos) {
+            // Somar todos os créditos disponíveis
+            const creditos = data.parametrosFiscais.creditos;
+            const creditosKeys = Object.keys(creditos);
+
+            creditosTotais = creditosKeys.reduce((total, key) => {
+                return total + (typeof creditos[key] === 'number' ? creditos[key] : 0);
+            }, 0);
+        }
+
         const dadosTributacao = [
-            { label: "Alíquota Efetiva:", valor: ((data.aliquota || 0) * 100) + "%" },
-            { label: "Redução Especial:", valor: ((data.reducao || 0) * 100) + "%" },
-            { label: "Tipo de Operação:", valor: data.tipoOperacao || "N/A" },
-            { 
-                label: "Créditos Tributários:",
-                valor: "R$ " + (typeof data.creditos === "number" ? data.creditos.toLocaleString("pt-BR") : "N/A")
-            },
-            { label: "Compensação de Créditos:", valor: data.compensacao || "N/A" }
+            { label: "Alíquota Efetiva:", valor: aliquota },
+            { label: "Redução Especial:", valor: reducaoEspecial },
+            { label: "Tipo de Operação:", valor: tipoOperacao },
+            { label: "Créditos Tributários:", valor: formatCurrency(creditosTotais) },
+            { label: "Compensação de Créditos:", valor: data?.parametrosFiscais?.compensacao || 'N/A' }
         ];
 
         dadosTributacao.forEach(item => {
@@ -431,13 +565,32 @@ class PDFExporter extends BaseExporter {
         currentY += 10;
 
         // Dados ciclo financeiro
+        const pmr = typeof data?.cicloFinanceiro?.pmr === 'number' ? data.cicloFinanceiro.pmr + ' dias' : 'N/A';
+        const pmp = typeof data?.cicloFinanceiro?.pmp === 'number' ? data.cicloFinanceiro.pmp + ' dias' : 'N/A';
+        const pme = typeof data?.cicloFinanceiro?.pme === 'number' ? data.cicloFinanceiro.pme + ' dias' : 'N/A';
+
+        // Calcular ciclo financeiro
+        let cicloFinanceiro = 'N/A';
+        if (typeof data?.cicloFinanceiro?.pmr === 'number' && 
+            typeof data?.cicloFinanceiro?.pmp === 'number' && 
+            typeof data?.cicloFinanceiro?.pme === 'number') {
+            cicloFinanceiro = (data.cicloFinanceiro.pmr + data.cicloFinanceiro.pme - data.cicloFinanceiro.pmp) + ' dias';
+        }
+
+        // Percentuais com validação
+        const percVista = typeof data?.cicloFinanceiro?.percVista === 'number' ? 
+            formatPercentage(data.cicloFinanceiro.percVista) : 'N/A';
+
+        const percPrazo = typeof data?.cicloFinanceiro?.percPrazo === 'number' ? 
+            formatPercentage(data.cicloFinanceiro.percPrazo) : 'N/A';
+
         const dadosCiclo = [
-            { label: "Prazo Médio de Recebimento:", valor: (data.pmr || 0) + " dias" },
-            { label: "Prazo Médio de Pagamento:", valor: (data.pmp || 0) + " dias" },
-            { label: "Prazo Médio de Estoque:", valor: (data.pme || 0) + " dias" },
-            { label: "Ciclo Financeiro:", valor: (data.cicloFinanceiro || 0) + " dias" },
-            { label: "Vendas à Vista:", valor: ((data.percVista || 0) * 100) + "%" },
-            { label: "Vendas a Prazo:", valor: ((data.percPrazo || 0) * 100) + "%" }
+            { label: "Prazo Médio de Recebimento:", valor: pmr },
+            { label: "Prazo Médio de Pagamento:", valor: pmp },
+            { label: "Prazo Médio de Estoque:", valor: pme },
+            { label: "Ciclo Financeiro:", valor: cicloFinanceiro },
+            { label: "Vendas à Vista:", valor: percVista },
+            { label: "Vendas a Prazo:", valor: percPrazo }
         ];
 
         dadosCiclo.forEach(item => {
@@ -458,11 +611,22 @@ class PDFExporter extends BaseExporter {
         currentY += 10;
 
         // Dados da simulação
+        const dataInicial = data?.parametrosSimulacao?.dataInicial ? 
+            manager.formatDateSimple(new Date(data.parametrosSimulacao.dataInicial)) : 'N/A';
+
+        const dataFinal = data?.parametrosSimulacao?.dataFinal ? 
+            manager.formatDateSimple(new Date(data.parametrosSimulacao.dataFinal)) : 'N/A';
+
+        const cenario = data?.parametrosSimulacao?.cenario || 'N/A';
+
+        const taxaCrescimento = typeof data?.parametrosSimulacao?.taxaCrescimento === 'number' ? 
+            formatPercentage(data.parametrosSimulacao.taxaCrescimento) + ' a.a.' : 'N/A';
+
         const parametrosSimulacao = [
-            { label: "Data Inicial:", valor: manager.formatDateSimple(new Date(data.dataInicial)) },
-            { label: "Data Final:", valor: manager.formatDateSimple(new Date(data.dataFinal)) },
-            { label: "Cenário de Crescimento:", valor: data.cenario || "N/A" },
-            { label: "Taxa de Crescimento:", valor: ((data.taxaCrescimento || 0) * 100) + "% a.a." }
+            { label: "Data Inicial:", valor: dataInicial },
+            { label: "Data Final:", valor: dataFinal },
+            { label: "Cenário de Crescimento:", valor: cenario },
+            { label: "Taxa de Crescimento:", valor: taxaCrescimento }
         ];
 
         parametrosSimulacao.forEach(item => {
@@ -489,12 +653,26 @@ class PDFExporter extends BaseExporter {
         currentY += 15;
 
         // Formatadores
-        const manager = new ExportManager();
-        const formatCurrency = manager.formatCurrency.bind(manager);
-        const formatPercentage = manager.formatPercentage.bind(manager);
+        const formatCurrency = (valor) => {
+            if (typeof window.DataManager !== 'undefined' && typeof window.DataManager.formatarMoeda === 'function') {
+                return window.DataManager.formatarMoeda(valor);
+            }
+            return new ExportManager().formatCurrency(valor);
+        };
+
+        const formatPercentage = (valor) => {
+            if (typeof window.DataManager !== 'undefined' && typeof window.DataManager.formatarPercentual === 'function') {
+                return window.DataManager.formatarPercentual(valor);
+            }
+
+            if (valor === undefined || valor === null || isNaN(parseFloat(valor))) {
+                return "0,00%";
+            }
+            return `${Math.abs(parseFloat(valor)).toFixed(2)}%`;
+        };
 
         // Verificar se temos dados suficientes
-        if (exportResults && exportResults.resultadosPorAno) {
+        if (exportResults && (exportResults.resultadosPorAno || exportResults.anos)) {
             // Seção 2.1 - Tabela de Resultados
             doc.setFont("helvetica", "bold");
             doc.setFontSize(14);
@@ -511,21 +689,70 @@ class PDFExporter extends BaseExporter {
                 "Variação (%)"
             ];
 
+            // Obter anos de qualquer estrutura válida
+            let anos = [];
+            if (Array.isArray(exportResults.anos)) {
+                anos = exportResults.anos;
+            } else if (exportResults.resultadosPorAno) {
+                anos = Object.keys(exportResults.resultadosPorAno).sort();
+            } else if (simulation.projecaoTemporal && simulation.projecaoTemporal.resultadosAnuais) {
+                anos = Object.keys(simulation.projecaoTemporal.resultadosAnuais).sort();
+            }
+
+            if (anos.length === 0) {
+                // Tentar extrair anos do cronograma
+                if (simulation.cronogramaImplementacao) {
+                    anos = Object.keys(simulation.cronogramaImplementacao).sort();
+                } else {
+                    // Usar anos padrão
+                    anos = ["2026", "2027", "2028", "2029", "2030", "2031", "2032", "2033"];
+                }
+            }
+
             // Preparar dados para a tabela
-            const anos = exportResults.anos || Object.keys(exportResults.resultadosPorAno).sort();
             const tableData = [];
 
             // Cabeçalho
             tableData.push(headers);
 
+            // Função auxiliar para obter dados do ano de forma robusta
+            const obterDadosAno = (ano) => {
+                let resultado = null;
+
+                // Tentar encontrar em várias estruturas possíveis
+                if (exportResults.resultadosPorAno && exportResults.resultadosPorAno[ano]) {
+                    resultado = exportResults.resultadosPorAno[ano];
+                } else if (Array.isArray(exportResults.resultados) && exportResults.resultados[ano]) {
+                    resultado = exportResults.resultados[ano];
+                } else if (simulation.projecaoTemporal && 
+                          simulation.projecaoTemporal.resultadosAnuais && 
+                          simulation.projecaoTemporal.resultadosAnuais[ano]) {
+                    resultado = simulation.projecaoTemporal.resultadosAnuais[ano];
+                } else if (simulation[ano]) {
+                    // Formato direto por ano (estrutura plana)
+                    resultado = simulation[ano];
+                }
+
+                return resultado || {};
+            };
+
             // Dados por ano
             anos.forEach(ano => {
-                const dadosAno = exportResults.resultadosPorAno[ano] || {};
-                
+                const dadosAno = obterDadosAno(ano);
+
                 // Extrair valores com segurança
-                const capitalGiroSplitPayment = dadosAno.capitalGiroSplitPayment || dadosAno.impostoDevido || 0;
-                const capitalGiroAtual = dadosAno.capitalGiroAtual || dadosAno.sistemaAtual || 0;
-                const diferenca = dadosAno.diferenca || (capitalGiroSplitPayment - capitalGiroAtual);
+                const capitalGiroSplitPayment = dadosAno.capitalGiroSplitPayment || 
+                                               dadosAno.resultadoSplitPayment?.capitalGiroDisponivel ||
+                                               dadosAno.impostoDevido || 0;
+
+                const capitalGiroAtual = dadosAno.capitalGiroAtual || 
+                                        dadosAno.resultadoAtual?.capitalGiroDisponivel ||
+                                        dadosAno.sistemaAtual || 0;
+
+                const diferenca = dadosAno.diferencaCapitalGiro || 
+                                 dadosAno.diferenca || 
+                                 (capitalGiroSplitPayment - capitalGiroAtual);
+
                 const percentualImpacto = dadosAno.percentualImpacto || 
                                          (capitalGiroAtual !== 0 ? (diferenca / capitalGiroAtual) * 100 : 0);
 
@@ -562,7 +789,7 @@ class PDFExporter extends BaseExporter {
                             // Obter o valor da célula (remover formatação)
                             let valorStr = data.cell.text[0];
                             let valor = 0;
-                            
+
                             if (data.column.index === 3) {
                                 // Coluna Diferença - formato R$ X.XXX,XX
                                 valor = parseFloat(valorStr.replace('R$', '').replace(/\./g, '').replace(',', '.').trim());
@@ -581,7 +808,7 @@ class PDFExporter extends BaseExporter {
                                 doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
                             }
                         }
-                        
+
                         // Colorir linhas alternadas
                         if (data.row.index % 2 === 0 && data.column.index === 0) {
                             doc.setFillColor(245, 245, 245);
@@ -608,11 +835,13 @@ class PDFExporter extends BaseExporter {
             let valorMaiorImpacto = 0;
 
             anos.forEach(ano => {
-                const dadosAno = exportResults.resultadosPorAno[ano] || {};
-                const diferenca = dadosAno.diferenca || 0;
-                
+                const dadosAno = obterDadosAno(ano);
+                const diferenca = dadosAno.diferencaCapitalGiro || 
+                                 dadosAno.diferenca || 
+                                 ((dadosAno.capitalGiroSplitPayment || 0) - (dadosAno.capitalGiroAtual || 0));
+
                 variacaoTotal += diferenca;
-                
+
                 if (Math.abs(diferenca) > Math.abs(valorMaiorImpacto)) {
                     valorMaiorImpacto = diferenca;
                     anoMaiorImpacto = ano;
@@ -700,7 +929,7 @@ class PDFExporter extends BaseExporter {
             doc.setTextColor(231, 76, 60);
             doc.text("Dados de resultados não disponíveis ou em formato incompatível.", margins.left, currentY);
             currentY += 10;
-            
+
             doc.setFont("helvetica", "normal");
             doc.setFontSize(11);
             doc.setTextColor(0, 0, 0);
@@ -1323,60 +1552,69 @@ class PDFExporter extends BaseExporter {
         doc.text('6. Conclusão e Recomendações', margins.left, currentY);
         currentY += 15;
 
-        // Extrair dados com segurança
-        let empresaNome = data.empresa || "a empresa";
+        // Extrair dados com segurança usando a estrutura canônica
+        let empresaNome = data?.empresa?.nome || "a empresa";
         let anoInicial = "";
         let anoFinal = "";
         let variacaoTotal = 0;
         let tendencia = "variação";
 
-        // Obter resultadosExportacao de qualquer localização
-        const resultadosExportacao = simulation.resultadosExportacao ||
-                                    (simulation.resultados && simulation.resultados.resultadosExportacao);
+        // Obter anos do cronograma
+        if (data?.parametrosSimulacao) {
+            if (data.parametrosSimulacao.dataInicial) {
+                anoInicial = data.parametrosSimulacao.dataInicial.split('-')[0] || '2026';
+            }
+
+            if (data.parametrosSimulacao.dataFinal) {
+                anoFinal = data.parametrosSimulacao.dataFinal.split('-')[0] || '2033';
+            }
+        }
+
+        if (!anoInicial) anoInicial = '2026';
+        if (!anoFinal) anoFinal = '2033';
+
+        // Obter resultadosExportacao de qualquer localização estruturada
+        let resultadosExportacao = null;
+
+        if (simulation) {
+            if (simulation.resultadosExportacao) {
+                resultadosExportacao = simulation.resultadosExportacao;
+            } else if (simulation.resultados && simulation.resultados.resultadosExportacao) {
+                resultadosExportacao = simulation.resultados.resultadosExportacao;
+            } else if (simulation.projecaoTemporal && simulation.projecaoTemporal.impactoAcumulado) {
+                // Usar formato de projeção diretamente
+                variacaoTotal = simulation.projecaoTemporal.impactoAcumulado.totalNecessidadeCapitalGiro || 0;
+                tendencia = variacaoTotal > 0 ? "aumento" : "redução";
+            }
+        }
 
         if (resultadosExportacao) {
             // Usar a estrutura de dados
             const resumo = resultadosExportacao.resumo || {};
             const anos = resultadosExportacao.anos || [];
-            
-            anoInicial = anos.length > 0 ? anos[0] : "";
-            anoFinal = anos.length > 0 ? anos[anos.length - 1] : "";
+
+            if (!anoInicial && anos.length > 0) anoInicial = anos[0];
+            if (!anoFinal && anos.length > 0) anoFinal = anos[anos.length - 1];
+
             variacaoTotal = resumo.variacaoTotal || 0;
             tendencia = resumo.tendenciaGeral || (variacaoTotal > 0 ? "aumento" : "redução");
-        } else {
-            // Tentar extrair informações da estrutura antiga
-            const resultados = simulation.resultados || {};
-            const anos = Object.keys(resultados)
-                .filter((key) => !isNaN(parseInt(key)))
-                .sort();
-                
-            anoInicial = anos.length > 0 ? anos[0] : "";
-            anoFinal = anos.length > 0 ? anos[anos.length - 1] : "";
-            
-            // Tentar calcular variação total
-            anos.forEach((ano) => {
-                const resultado = resultados[ano] || {};
-                
-                // Verificar se temos os dados necessários
-                if (resultado && resultado.imposto_devido) {
-                    const valorAtual =
-                        equivalentRates &&
-                        equivalentRates[ano] &&
-                        typeof equivalentRates[ano].valor_atual !== "undefined"
-                            ? equivalentRates[ano].valor_atual
-                            : 0;
-                            
-                    const diferenca = resultado.imposto_devido - valorAtual;
-                    variacaoTotal += diferenca;
-                }
-            });
-            
+        } else if (!variacaoTotal && simulation.impactoBase) {
+            // Tentar extrair da estrutura do impactoBase
+            if (typeof simulation.impactoBase.diferencaCapitalGiro === 'number') {
+                // Multipicar por período estimado para ter impacto acumulado
+                const anos = parseInt(anoFinal) - parseInt(anoInicial) + 1;
+                variacaoTotal = simulation.impactoBase.diferencaCapitalGiro * anos;
+            }
             tendencia = variacaoTotal > 0 ? "aumento" : "redução";
         }
 
         // Formatar números
-        const manager = new ExportManager();
-        const formatCurrency = manager.formatCurrency.bind(manager);
+        const formatCurrency = (valor) => {
+            if (typeof window.DataManager !== 'undefined' && typeof window.DataManager.formatarMoeda === 'function') {
+                return window.DataManager.formatarMoeda(valor);
+            }
+            return new ExportManager().formatCurrency(valor);
+        };
 
         // Texto da conclusão
         doc.setFont("helvetica", "normal");
@@ -1398,12 +1636,12 @@ class PDFExporter extends BaseExporter {
         que no modelo atual ocorre em média 30-45 dias após o faturamento, e no novo modelo ocorrerá de forma instantânea 
         no momento da transação financeira. Esta mudança afeta diretamente o ciclo financeiro da empresa 
         e sua necessidade de capital de giro.`;
-        
+
         const linhasImpacto = doc.splitTextToSize(
             impactoTexto,
             pageWidth - margins.left - margins.right
         );
-        
+
         doc.text(linhasImpacto, margins.left, currentY);
         currentY += linhasImpacto.length * 7 + 10;
 
@@ -1418,27 +1656,27 @@ class PDFExporter extends BaseExporter {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
         doc.setTextColor(60, 60, 60);
-        
+
         const recomendacoes = [
             `1. Planejamento Financeiro: Recomenda-se iniciar imediatamente o planejamento financeiro 
             para adequação ao novo regime, considerando a implementação gradual do Split Payment a partir de 2026.`,
-            
+
             `2. Estratégias de Mitigação: Conforme análise apresentada na seção 4, 
             sugere-se a implementação de uma combinação de estratégias para minimizar o impacto no fluxo de caixa.`,
-            
+
             `3. Sistemas: Realizar a adequação dos sistemas de gestão financeira e contábil para operação 
             com o novo modelo de recolhimento tributário.`,
-            
+
             `4. Monitoramento Contínuo: Manter acompanhamento constante das alterações na regulamentação 
             do Split Payment, que ainda está em fase de definição pelos órgãos competentes.`
         ];
-        
+
         recomendacoes.forEach((recomendacao) => {
             const linhasRecomendacao = doc.splitTextToSize(
                 recomendacao,
                 pageWidth - margins.left - margins.right
             );
-            
+
             doc.text(linhasRecomendacao, margins.left, currentY);
             currentY += linhasRecomendacao.length * 7 + 5;
         });
@@ -1464,18 +1702,18 @@ class PDFExporter extends BaseExporter {
         doc.setFontSize(12);
         doc.setTextColor(this.config.pdf.colors.primary[0], this.config.pdf.colors.primary[1], this.config.pdf.colors.primary[2]);
         doc.text('Entre em contato para um diagnóstico personalizado', margins.left + 5, boxY + 15);
-        
+
         doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
         doc.setTextColor(60, 60, 60);
-        
+
         doc.text('Este relatório foi gerado pelo Simulador de Split Payment desenvolvido pela Expertzy Inteligência Tributária.', 
                 margins.left + 5, boxY + 25);
         doc.text('Para obter um diagnóstico personalizado e aprofundado, entre em contato: contato@expertzy.com.br', 
                 margins.left + 5, boxY + 32);
-                
+
         currentY += boxHeight + 10;
-        
+
         return currentY;
     }
 
@@ -1688,55 +1926,132 @@ class ExcelExporter extends BaseExporter {
     }
 
     _createSummaryWorksheet(data, results, equivalentRates) {
-        const manager = new ExportManager();
-        
+        // Verificar se temos o DataManager disponível
+        const usarDataManager = typeof window.DataManager !== 'undefined';
+
+        // Obter a estrutura aninhada se os dados não estiverem no formato canônico
+        let dadosAninhados;
+        if (data) {
+            if (data.empresa !== undefined) {
+                // Já está no formato aninhado
+                dadosAninhados = usarDataManager ? 
+                    window.DataManager.validarENormalizar(data) : data;
+            } else {
+                // Está em formato plano, converter
+                dadosAninhados = usarDataManager ? 
+                    window.DataManager.converterParaEstruturaAninhada(data) : 
+                    this._converterParaEstruturaAninhada(data);
+            }
+        } else {
+            // Dados não fornecidos, usar estrutura vazia
+            dadosAninhados = {
+                empresa: {},
+                cicloFinanceiro: {},
+                parametrosFiscais: {},
+                parametrosSimulacao: {}
+            };
+        }
+
+        // Formatar dados usando o método padronizado
+        const formatarMoeda = (valor) => this._formatarValorPadrao(valor, 'monetario');
+        const formatarPercentual = (valor) => this._formatarValorPadrao(valor, 'percentual');
+        const formatarData = (valor) => this._formatarValorPadrao(valor, 'data');
+
         // Dados da planilha
         const summaryData = [
             ["RELATÓRIO DE SIMULAÇÃO - SPLIT PAYMENT"],
             ["Expertzy Inteligência Tributária"],
-            ["Data do relatório:", manager.formatDate(new Date())],
+            ["Data do relatório:", formatarData(new Date())],
             [],
             ["RESUMO EXECUTIVO"],
             [],
             ["Parâmetros Principais"],
-            ["Setor:", data.setor ? manager.capitalizeFirstLetter(data.setor) : ""],
-            ["Regime Tributário:", manager.getTaxRegimeFormatted(data.regime)],
-            ["Faturamento Anual:", data.faturamento],
-            ["Período de Simulação:", `${data.anoInicial || 2026} a ${data.anoFinal || 2033}`],
+            ["Empresa:", dadosAninhados.empresa.nome || ""],
+            ["Setor:", this._obterNomeSetor(dadosAninhados.empresa.setor)],
+            ["Regime Tributário:", this._obterRegimeTributario(dadosAninhados.empresa.regime)],
+            ["Faturamento Anual:", dadosAninhados.empresa.faturamento],
+            ["Período de Simulação:", 
+                `${dadosAninhados.parametrosSimulacao.dataInicial?.split('-')[0] || '2026'} a ${dadosAninhados.parametrosSimulacao.dataFinal?.split('-')[0] || '2033'}`
+            ],
             [],
             ["Resultados Principais"]
         ];
 
         // Calcular indicadores
-        const anos = Object.keys(results).filter(k => !isNaN(parseInt(k))).sort();
+        let anos = [];
+
+        // Obter anos considerando várias estruturas possíveis
+        if (results) {
+            if (Array.isArray(results.anos)) {
+                anos = results.anos;
+            } else if (results.resultadosPorAno) {
+                anos = Object.keys(results.resultadosPorAno).sort();
+            } else if (results.projecaoTemporal && results.projecaoTemporal.resultadosAnuais) {
+                anos = Object.keys(results.projecaoTemporal.resultadosAnuais).sort();
+            } else {
+                // Tentar obter anos das chaves diretas do objeto
+                anos = Object.keys(results)
+                    .filter(k => !isNaN(parseInt(k)) && String(parseInt(k)) === k)
+                    .sort();
+            }
+        }
+
+        if (anos.length === 0) {
+            // Usar anos padrão
+            anos = ["2026", "2027", "2028", "2029", "2030", "2031", "2032", "2033"];
+        }
+
         let variacaoTotal = 0;
         let maiorImpacto = { valor: 0, ano: "" };
         let menorImpacto = { valor: Number.MAX_SAFE_INTEGER, ano: "" };
 
+        // Função auxiliar para obter resultado de um ano
+        const obterResultadoAno = (ano) => {
+            let resultado = null;
+
+            // Tentar encontrar em várias estruturas possíveis
+            if (results) {
+                if (results.resultadosPorAno && results.resultadosPorAno[ano]) {
+                    resultado = results.resultadosPorAno[ano];
+                } else if (results.projecaoTemporal && 
+                           results.projecaoTemporal.resultadosAnuais &&
+                           results.projecaoTemporal.resultadosAnuais[ano]) {
+                    resultado = results.projecaoTemporal.resultadosAnuais[ano];
+                } else if (results[ano]) {
+                    // Formato direto por ano
+                    resultado = results[ano];
+                }
+            }
+
+            return resultado || {};
+        };
+
         // Calcular variações e encontrar maior/menor impacto
         anos.forEach((ano) => {
-            const resultado = results[ano] || {};
-            
-            // Verificação robusta para evitar erro
-            const valorAtual =
-                equivalentRates[ano] && typeof equivalentRates[ano].valor_atual !== "undefined"
-                    ? equivalentRates[ano].valor_atual
-                    : 0;
-                    
-            // Definir valorNovo como o imposto devido do resultado
-            const valorNovo = resultado.imposto_devido || 0;
-            const diferenca = valorNovo - valorAtual;
-            const percentual = valorAtual !== 0 ? diferenca / valorAtual : 0;
+            const resultado = obterResultadoAno(ano);
+
+            // Obter valores com segurança
+            const valorAtual = resultado.capitalGiroAtual || 
+                              resultado.resultadoAtual?.capitalGiroDisponivel ||
+                              (equivalentRates[ano] && equivalentRates[ano].valor_atual) || 0;
+
+            const valorNovo = resultado.capitalGiroSplitPayment || 
+                             resultado.resultadoSplitPayment?.capitalGiroDisponivel ||
+                             resultado.imposto_devido || 0;
+
+            const diferenca = resultado.diferencaCapitalGiro || 
+                             resultado.diferenca || 
+                             (valorNovo - valorAtual);
 
             // Acumular variação total
             variacaoTotal += diferenca;
-            
+
             // Verificar maior impacto
             if (Math.abs(diferenca) > Math.abs(maiorImpacto.valor)) {
                 maiorImpacto.valor = diferenca;
                 maiorImpacto.ano = ano;
             }
-            
+
             // Verificar menor impacto
             if (Math.abs(diferenca) < Math.abs(menorImpacto.valor)) {
                 menorImpacto.valor = diferenca;
@@ -1751,8 +2066,8 @@ class ExcelExporter extends BaseExporter {
         summaryData.push(
             ["Impacto Geral:", impactoGeral],
             ["Variação Total Acumulada:", variacaoTotal],
-            ["Ano de Maior Impacto:", `${maiorImpacto.ano} (${maiorImpacto.valor})`],
-            ["Ano de Menor Impacto:", `${menorImpacto.ano} (${menorImpacto.valor})`],
+            ["Ano de Maior Impacto:", `${maiorImpacto.ano} (${formatarMoeda(maiorImpacto.valor)})`],
+            ["Ano de Menor Impacto:", `${menorImpacto.ano} (${formatarMoeda(menorImpacto.valor)})`],
             []
         );
 
@@ -1761,16 +2076,21 @@ class ExcelExporter extends BaseExporter {
 
         // Adicionar dados para cada ano
         anos.forEach((ano) => {
-            const resultado = results[ano] || {};
-            
-            // Verificação robusta para evitar erro
-            const valorAtual =
-                equivalentRates[ano] && typeof equivalentRates[ano].valor_atual !== "undefined"
-                    ? equivalentRates[ano].valor_atual
-                    : 0;
-                    
-            const valorNovo = resultado.imposto_devido || 0;
-            const diferenca = valorNovo - valorAtual;
+            const resultado = obterResultadoAno(ano);
+
+            // Obter valores com segurança
+            const valorAtual = resultado.capitalGiroAtual || 
+                              resultado.resultadoAtual?.capitalGiroDisponivel ||
+                              (equivalentRates[ano] && equivalentRates[ano].valor_atual) || 0;
+
+            const valorNovo = resultado.capitalGiroSplitPayment || 
+                             resultado.resultadoSplitPayment?.capitalGiroDisponivel ||
+                             resultado.imposto_devido || 0;
+
+            const diferenca = resultado.diferencaCapitalGiro || 
+                             resultado.diferenca || 
+                             (valorNovo - valorAtual);
+
             const percentual = valorAtual !== 0 ? diferenca / valorAtual : 0;
 
             summaryData.push([parseInt(ano), valorNovo, valorAtual, diferenca, percentual]);
@@ -1796,6 +2116,105 @@ class ExcelExporter extends BaseExporter {
         this._applySummaryStyles(ws, summaryData, anos.length);
 
         return ws;
+    }
+
+    /**
+     * Obtém o nome do regime tributário formatado
+     * @private
+     * @param {string} regimeCodigo - Código do regime
+     * @returns {string} Nome formatado do regime
+     */
+    _obterRegimeTributario(regimeCodigo) {
+        const regimes = {
+            'real': 'Lucro Real',
+            'presumido': 'Lucro Presumido',
+            'simples': 'Simples Nacional',
+            'mei': 'Microempreendedor Individual',
+            'imune': 'Entidade Imune/Isenta'
+        };
+
+        return regimes[regimeCodigo] || regimeCodigo || '';
+    }
+
+    /**
+     * Obtém o nome do setor formatado
+     * @private
+     * @param {string} setorCodigo - Código do setor
+     * @returns {string} Nome formatado do setor
+     */
+    _obterNomeSetor(setorCodigo) {
+        // Tentar obter o setor do repositório
+        if (window.SetoresRepository && typeof window.SetoresRepository.obterSetor === 'function') {
+            const setor = window.SetoresRepository.obterSetor(setorCodigo);
+            if (setor && setor.nome) {
+                return setor.nome;
+            }
+        }
+
+        // Fallback: capitalizar o código do setor
+        return setorCodigo ? 
+            setorCodigo.charAt(0).toUpperCase() + setorCodigo.slice(1).toLowerCase() : '';
+    }
+
+    /**
+     * Conversão simples para estrutura aninhada (fallback quando DataManager não disponível)
+     * @private
+     * @param {Object} dadosPlanos - Dados em formato plano
+     * @returns {Object} Dados em formato aninhado
+     */
+    _converterParaEstruturaAninhada(dadosPlanos) {
+        if (!dadosPlanos) return { empresa: {}, cicloFinanceiro: {}, parametrosFiscais: {}, parametrosSimulacao: {} };
+
+        // Estrutura básica
+        const resultado = {
+            empresa: {
+                nome: dadosPlanos.empresa || '',
+                faturamento: dadosPlanos.faturamento || 0,
+                margem: dadosPlanos.margem || 0,
+                setor: dadosPlanos.setor || '',
+                tipoEmpresa: dadosPlanos.tipoEmpresa || '',
+                regime: dadosPlanos.regime || ''
+            },
+            cicloFinanceiro: {
+                pmr: dadosPlanos.pmr || 30,
+                pmp: dadosPlanos.pmp || 30,
+                pme: dadosPlanos.pme || 30,
+                percVista: dadosPlanos.percVista || 0.3,
+                percPrazo: dadosPlanos.percPrazo || 0.7
+            },
+            parametrosFiscais: {
+                aliquota: dadosPlanos.aliquota || 0.265,
+                tipoOperacao: dadosPlanos.tipoOperacao || '',
+                regimePisCofins: dadosPlanos.regimePisCofins || '',
+                creditos: {
+                    pis: dadosPlanos.creditosPIS || 0,
+                    cofins: dadosPlanos.creditosCOFINS || 0,
+                    icms: dadosPlanos.creditosICMS || 0,
+                    ipi: dadosPlanos.creditosIPI || 0,
+                    cbs: dadosPlanos.creditosCBS || 0,
+                    ibs: dadosPlanos.creditosIBS || 0
+                }
+            },
+            parametrosSimulacao: {
+                cenario: dadosPlanos.cenario || 'moderado',
+                taxaCrescimento: dadosPlanos.taxaCrescimento || 0.05,
+                dataInicial: dadosPlanos.dataInicial || '2026-01-01',
+                dataFinal: dadosPlanos.dataFinal || '2033-12-31',
+                splitPayment: dadosPlanos.splitPayment !== false
+            }
+        };
+
+        // Adicionar configuração IVA se disponível
+        if (dadosPlanos.aliquotaCBS || dadosPlanos.aliquotaIBS || dadosPlanos.categoriaIva || dadosPlanos.reducaoEspecial) {
+            resultado.ivaConfig = {
+                cbs: dadosPlanos.aliquotaCBS || 0.088,
+                ibs: dadosPlanos.aliquotaIBS || 0.177,
+                categoriaIva: dadosPlanos.categoriaIva || 'standard',
+                reducaoEspecial: dadosPlanos.reducaoEspecial || 0
+            };
+        }
+
+        return resultado;
     }
 
     _createResultsWorksheet(data, results) {
@@ -1989,6 +2408,49 @@ class ExcelExporter extends BaseExporter {
         ];
 
         return ws;
+    }
+    
+    /**
+     * Aplica a formatação padrão para os valores nos relatórios
+     * @param {any} valor - Valor a ser formatado
+     * @param {string} tipo - Tipo de formatação ('monetario', 'percentual', 'data', 'texto')
+     * @returns {any} Valor formatado
+     */
+    _formatarValorPadrao(valor, tipo) {
+        // Verificar se temos o DataManager disponível
+        if (typeof window.DataManager !== 'undefined') {
+            switch (tipo) {
+                case 'monetario':
+                    if (typeof window.DataManager.formatarMoeda === 'function') {
+                        return window.DataManager.formatarMoeda(valor);
+                    }
+                    break;
+                case 'percentual':
+                    if (typeof window.DataManager.formatarPercentual === 'function') {
+                        return window.DataManager.formatarPercentual(valor * 100);
+                    }
+                    break;
+                case 'data':
+                    if (typeof window.DataManager.formatarData === 'function') {
+                        return window.DataManager.formatarData(valor);
+                    }
+                    break;
+            }
+        }
+
+        // Fallback para o ExportManager
+        const manager = new ExportManager();
+
+        switch (tipo) {
+            case 'monetario':
+                return manager.formatCurrency(valor);
+            case 'percentual':
+                return manager.formatPercentage(valor * 100);
+            case 'data':
+                return manager.formatDate(new Date(valor));
+            default:
+                return valor ? valor.toString() : '';
+        }
     }
 }
 
