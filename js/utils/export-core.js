@@ -320,5 +320,5 @@ class ExportManager {
     }
 }
 
-// Export the class
-export default ExportManager;
+// Expor a classe ao escopo global
+window.ExportManager = ExportManager;

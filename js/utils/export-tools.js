@@ -2,7 +2,6 @@
  * Ferramentas de Exportação
  * Gerencia a exportação de dados para diferentes formatos
  */
-import { PDFExporter, ExcelExporter } from './document-exporters.js';
 
 const ExportTools = (function() {
     let pdfExporter = null;
@@ -17,27 +16,45 @@ const ExportTools = (function() {
         console.log("Inicializando ferramentas de exportação...");
         
         // Verificar bibliotecas necessárias
-        if (typeof window.jspdf === 'undefined' && typeof window.jsPDF === 'undefined') {
+        const jspdfAvailable = typeof window.jspdf !== 'undefined' || typeof window.jsPDF !== 'undefined';
+        const xlsxAvailable = typeof XLSX !== 'undefined';
+        
+        if (!jspdfAvailable) {
             console.warn("Biblioteca jsPDF não carregada. A exportação para PDF não estará disponível.");
         }
         
-        if (typeof XLSX === 'undefined') {
+        if (!xlsxAvailable) {
             console.warn("Biblioteca XLSX (SheetJS) não carregada. A exportação para Excel não estará disponível.");
         }
         
         try {
-            // Criar instâncias dos exportadores
-            pdfExporter = new PDFExporter();
-            excelExporter = new ExcelExporter();
+            // Verificar se os exportadores estão disponíveis
+            if (typeof window.PDFExporter === 'undefined' || typeof window.ExcelExporter === 'undefined') {
+                console.error("Exportadores não encontrados. Verifique se document-exporters.js foi carregado corretamente.");
+                return;
+            }
             
-            // Registrar exportadores no gerenciador, se disponível
-            if (typeof ExportManager !== 'undefined') {
-                const manager = new ExportManager(config);
-                manager.registerExporter('pdf', pdfExporter);
-                manager.registerExporter('excel', excelExporter);
+            // Criar instâncias dos exportadores
+            pdfExporter = new window.PDFExporter();
+            excelExporter = new window.ExcelExporter();
+            
+            // Verificar se ExportManager está disponível
+            if (typeof window.ExportManager !== 'undefined') {
+                const manager = new window.ExportManager(config);
+                
+                // Registrar exportadores no gerenciador
+                if (pdfExporter) {
+                    manager.registerExporter('pdf', pdfExporter);
+                }
+                
+                if (excelExporter) {
+                    manager.registerExporter('excel', excelExporter);
+                }
                 
                 // Manter referência ao manager para uso nas funções de exportação
                 window.exportManager = manager;
+                
+                console.log("ExportManager inicializado e exportadores registrados com sucesso.");
             } else {
                 console.warn("ExportManager não encontrado. Usando exportadores diretamente.");
             }
@@ -60,17 +77,32 @@ const ExportTools = (function() {
         }
         
         if (!pdfExporter) {
-            alert("Exportador PDF não inicializado corretamente.");
+            console.error("PDFExporter não inicializado corretamente.");
+            alert("Exportador PDF não inicializado corretamente. Verifique o console para detalhes.");
             return;
         }
         
         try {
             // Obter dados da simulação atual
-            const simulacao = window.ultimaSimulacao || window.resultadosSimulacao;
+            let simulacao = window.ultimaSimulacao || window.resultadosSimulacao;
             
             if (!simulacao) {
                 alert("Nenhuma simulação disponível para exportar. Execute uma simulação primeiro.");
                 return;
+            }
+            
+            // Validar a estrutura dos dados usando DataManager se disponível
+            if (window.DataManager) {
+                const tipoEstrutura = window.DataManager.detectarTipoEstrutura(simulacao);
+                
+                if (tipoEstrutura === "plana") {
+                    // Converter para formato aninhado para exportação
+                    simulacao = window.DataManager.converterParaEstruturaAninhada(simulacao);
+                    console.log("Dados convertidos de estrutura plana para aninhada para exportação");
+                }
+                
+                // Validar e normalizar
+                simulacao = window.DataManager.validarENormalizar(simulacao);
             }
             
             // Exportar usando diretamente o exportador
@@ -103,17 +135,32 @@ const ExportTools = (function() {
         }
         
         if (!excelExporter) {
-            alert("Exportador Excel não inicializado corretamente.");
+            console.error("ExcelExporter não inicializado corretamente.");
+            alert("Exportador Excel não inicializado corretamente. Verifique o console para detalhes.");
             return;
         }
         
         try {
             // Obter dados da simulação atual
-            const simulacao = window.ultimaSimulacao || window.resultadosSimulacao;
+            let simulacao = window.ultimaSimulacao || window.resultadosSimulacao;
             
             if (!simulacao) {
                 alert("Nenhuma simulação disponível para exportar. Execute uma simulação primeiro.");
                 return;
+            }
+            
+            // Validar a estrutura dos dados usando DataManager se disponível
+            if (window.DataManager) {
+                const tipoEstrutura = window.DataManager.detectarTipoEstrutura(simulacao);
+                
+                if (tipoEstrutura === "plana") {
+                    // Converter para formato aninhado para exportação
+                    simulacao = window.DataManager.converterParaEstruturaAninhada(simulacao);
+                    console.log("Dados convertidos de estrutura plana para aninhada para exportação");
+                }
+                
+                // Validar e normalizar
+                simulacao = window.DataManager.validarENormalizar(simulacao);
             }
             
             // Exportar usando diretamente o exportador
@@ -187,6 +234,15 @@ const ExportTools = (function() {
 
 // Expor ao escopo global
 window.ExportTools = ExportTools;
+
+// Inicializar se o documento já estiver carregado
+if (document.readyState !== 'loading') {
+    ExportTools.inicializar();
+} else {
+    document.addEventListener('DOMContentLoaded', function() {
+        ExportTools.inicializar();
+    });
+}
 
 // Inicializar se o documento já estiver carregado
 if (document.readyState !== 'loading') {

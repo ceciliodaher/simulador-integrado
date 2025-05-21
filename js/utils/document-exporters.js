@@ -2,7 +2,6 @@
  * Document Exporters
  * Specific implementations for different export formats
  */
-import ExportManager from './export-core.js';
 
 /**
  * Base exporter class
@@ -2454,5 +2453,6 @@ class ExcelExporter extends BaseExporter {
     }
 }
 
-// Export the classes
-export { PDFExporter, ExcelExporter };
+// Expor as classes ao escopo global
+window.PDFExporter = PDFExporter;
+window.ExcelExporter = ExcelExporter;
