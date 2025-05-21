@@ -57,29 +57,10 @@ window.CurrentTaxSystem = (function() {
         irpj: 0.15,        // Alíquota básica
         csll: 0.09         // Alíquota padrão
     };
-
-    /**
-     * Obtém o percentual de implementação do Split Payment para um determinado ano
-     * 
-     * @param {number} ano - Ano para obter o percentual
-     * @param {Object} parametrosSetoriais - Parâmetros específicos do setor (opcional)
-     * @returns {number} - Percentual de implementação (decimal)
-     */
-    function obterPercentualImplementacao(ano, parametrosSetoriais = null) {
-        // Validar tipo do parâmetro ano
-        if (typeof ano !== 'number' || isNaN(ano) || ano < 2026 || ano > 2050) {
-            console.warn(`Ano inválido para cálculo de percentual de implementação: ${ano}. Usando valor padrão.`);
-            ano = 2026;
-        }
-
-        // Validar formato dos parâmetros setoriais
-        if (parametrosSetoriais !== null && typeof parametrosSetoriais !== 'object') {
-            console.warn('Formato inválido de parâmetros setoriais. Ignorando.');
-            parametrosSetoriais = null;
-        }
-
-        // Cronograma padrão de implementação
-        const cronogramaPadrao = {
+    
+    // Em current-tax-system.js
+    const cronogramasPadrao = {
+        splitPayment: {
             2026: 0.10,
             2027: 0.25,
             2028: 0.40,
@@ -88,19 +69,56 @@ window.CurrentTaxSystem = (function() {
             2031: 0.85,
             2032: 0.95,
             2033: 1.00
-        };
+        },
+        cbs: {
+            2026: 0.01, // Teste inicial (0,9% de uma alíquota de 8,8%)
+            2027: 1.00, // Implementação total em 2027
+            2028: 1.00,
+            2029: 1.00,
+            2030: 1.00,
+            2031: 1.00,
+            2032: 1.00,
+            2033: 1.00
+        },
+        ibs: {
+            2026: 0.00,
+            2027: 0.00,
+            2028: 0.00,
+            2029: 0.01, // Implementação inicial (0,1% de uma alíquota de 17,7%)
+            2030: 0.25, // 25% da alíquota total
+            2031: 0.50, // 50% da alíquota total
+            2032: 0.75, // 75% da alíquota total
+            2033: 1.00  // 100% da alíquota total
+        }
+    };
+
+    /**
+     * Obtém o percentual de implementação para um tipo específico de imposto/mecanismo
+     * @param {number} ano - Ano para obter o percentual
+     * @param {string} tipo - Tipo de cronograma ('splitPayment', 'cbs', 'ibs')
+     * @param {Object} parametrosSetoriais - Parâmetros específicos do setor (opcional)
+     * @returns {number} - Percentual de implementação (decimal)
+     */
+    function obterPercentualImplementacao(ano, tipo = 'splitPayment', parametrosSetoriais = null) {
+        // Validar tipo do parâmetro ano
+        if (typeof ano !== 'number' || isNaN(ano) || ano < 2026 || ano > 2050) {
+            console.warn(`Ano inválido para cálculo de percentual de implementação: ${ano}. Usando valor padrão.`);
+            ano = 2026;
+        }
 
         // Se houver parâmetros setoriais com cronograma próprio, utilizar
         if (parametrosSetoriais && 
             parametrosSetoriais.cronogramaProprio && 
-            parametrosSetoriais.cronograma && 
-            typeof parametrosSetoriais.cronograma[ano] === 'number') {
-            return parametrosSetoriais.cronograma[ano];
+            parametrosSetoriais.cronogramas && 
+            parametrosSetoriais.cronogramas[tipo] && 
+            typeof parametrosSetoriais.cronogramas[tipo][ano] === 'number') {
+            return parametrosSetoriais.cronogramas[tipo][ano];
         }
 
         // Caso contrário, utilizar o cronograma padrão
-        return cronogramaPadrao[ano] || 0;
-    }
+        const cronograma = cronogramasPadrao[tipo] || cronogramasPadrao.splitPayment;
+        return cronograma[ano] || 0;
+    }    
 
     /**
      * Calcula o PIS a ser recolhido

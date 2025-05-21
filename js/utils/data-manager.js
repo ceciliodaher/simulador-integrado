@@ -699,8 +699,91 @@ window.DataManager = (function() {
             dados.ivaConfig.ibs = parseFloat(document.getElementById('aliquota-ibs')?.value || '0') / 100;
             dados.ivaConfig.categoriaIva = document.getElementById('categoria-iva')?.value || 'standard';
             dados.ivaConfig.reducaoEspecial = parseFloat(document.getElementById('reducao')?.value || '0') / 100;
-            
-            // Estratégias não são capturadas aqui, pois têm sua própria tela/lógica
+
+            // Estratégias de Mitigação
+            // Assegurar que dados.estrategias existe e é um clone profundo para evitar alterar estruturaPadrao diretamente.
+            // Esta linha já existe no início da função: const dados = JSON.parse(JSON.stringify(estruturaPadrao));
+            // Portanto, dados.estrategias já está inicializado com os padrões.
+
+            // 1. Ajuste de Preços (ap)
+            const apAtivarElement = document.getElementById('ap-ativar');
+            if (apAtivarElement) {
+                dados.estrategias.ajustePrecos.ativar = apAtivarElement.value === '1';
+                if (dados.estrategias.ajustePrecos.ativar) {
+                    dados.estrategias.ajustePrecos.percentualAumento = parseFloat(document.getElementById('ap-percentual')?.value || estruturaPadrao.estrategias.ajustePrecos.percentualAumento);
+                    dados.estrategias.ajustePrecos.elasticidade = parseFloat(document.getElementById('ap-elasticidade')?.value || estruturaPadrao.estrategias.ajustePrecos.elasticidade);
+                    // impactoVendas é calculado, mas se o formulário tiver um campo, leia-o.
+                    // Se não, manter o padrão (que deve ser 0 ou atualizado por um cálculo posterior)
+                    const apImpactoVendasElement = document.getElementById('ap-impacto-vendas');
+                    if (apImpactoVendasElement) {
+                         dados.estrategias.ajustePrecos.impactoVendas = parseFloat(apImpactoVendasElement.value || estruturaPadrao.estrategias.ajustePrecos.impactoVendas);
+                    }
+                    dados.estrategias.ajustePrecos.periodo = parseInt(document.getElementById('ap-periodo')?.value || estruturaPadrao.estrategias.ajustePrecos.periodo);
+                }
+            }
+
+            // 2. Renegociação de Prazos (rp)
+            const rpAtivarElement = document.getElementById('rp-ativar');
+            if (rpAtivarElement) {
+                dados.estrategias.renegociacaoPrazos.ativar = rpAtivarElement.value === '1';
+                if (dados.estrategias.renegociacaoPrazos.ativar) {
+                    dados.estrategias.renegociacaoPrazos.aumentoPrazo = parseInt(document.getElementById('rp-aumento-prazo')?.value || estruturaPadrao.estrategias.renegociacaoPrazos.aumentoPrazo);
+                    dados.estrategias.renegociacaoPrazos.percentualFornecedores = parseFloat(document.getElementById('rp-percentual-fornecedores')?.value || estruturaPadrao.estrategias.renegociacaoPrazos.percentualFornecedores);
+                    dados.estrategias.renegociacaoPrazos.contrapartidas = document.getElementById('rp-contrapartidas')?.value || estruturaPadrao.estrategias.renegociacaoPrazos.contrapartidas;
+                    // custoContrapartida is Decimal (0-1) in estruturaPadrao. Assuming input is percentage.
+                    dados.estrategias.renegociacaoPrazos.custoContrapartida = parseFloat(document.getElementById('rp-custo-contrapartida')?.value || (estruturaPadrao.estrategias.renegociacaoPrazos.custoContrapartida * 100)) / 100;
+                }
+            }
+
+            // 3. Antecipação de Recebíveis (ar)
+            const arAtivarElement = document.getElementById('ar-ativar');
+            if (arAtivarElement) {
+                dados.estrategias.antecipacaoRecebiveis.ativar = arAtivarElement.value === '1';
+                if (dados.estrategias.antecipacaoRecebiveis.ativar) {
+                    dados.estrategias.antecipacaoRecebiveis.percentualAntecipacao = parseFloat(document.getElementById('ar-percentual-antecipacao')?.value || estruturaPadrao.estrategias.antecipacaoRecebiveis.percentualAntecipacao);
+                    dados.estrategias.antecipacaoRecebiveis.taxaDesconto = parseFloat(document.getElementById('ar-taxa-desconto')?.value || estruturaPadrao.estrategias.antecipacaoRecebiveis.taxaDesconto); // This is %, so direct parseFloat
+                    dados.estrategias.antecipacaoRecebiveis.prazoAntecipacao = parseInt(document.getElementById('ar-prazo-antecipacao')?.value || estruturaPadrao.estrategias.antecipacaoRecebiveis.prazoAntecipacao);
+                }
+            }
+
+            // 4. Capital de Giro (cg)
+            const cgAtivarElement = document.getElementById('cg-ativar');
+            if (cgAtivarElement) {
+                dados.estrategias.capitalGiro.ativar = cgAtivarElement.value === '1';
+                if (dados.estrategias.capitalGiro.ativar) {
+                    dados.estrategias.capitalGiro.valorCaptacao = parseFloat(document.getElementById('cg-valor-captacao')?.value || estruturaPadrao.estrategias.capitalGiro.valorCaptacao); // This is %, so direct parseFloat
+                    dados.estrategias.capitalGiro.taxaJuros = parseFloat(document.getElementById('cg-taxa-juros')?.value || estruturaPadrao.estrategias.capitalGiro.taxaJuros); // This is % a.m., so direct parseFloat
+                    dados.estrategias.capitalGiro.prazoPagamento = parseInt(document.getElementById('cg-prazo-pagamento')?.value || estruturaPadrao.estrategias.capitalGiro.prazoPagamento);
+                    dados.estrategias.capitalGiro.carencia = parseInt(document.getElementById('cg-carencia')?.value || estruturaPadrao.estrategias.capitalGiro.carencia);
+                }
+            }
+
+            // 5. Mix de Produtos (mp)
+            const mpAtivarElement = document.getElementById('mp-ativar');
+            if (mpAtivarElement) {
+                dados.estrategias.mixProdutos.ativar = mpAtivarElement.value === '1';
+                if (dados.estrategias.mixProdutos.ativar) {
+                    dados.estrategias.mixProdutos.percentualAjuste = parseFloat(document.getElementById('mp-percentual-ajuste')?.value || estruturaPadrao.estrategias.mixProdutos.percentualAjuste);
+                    dados.estrategias.mixProdutos.focoAjuste = document.getElementById('mp-foco-ajuste')?.value || estruturaPadrao.estrategias.mixProdutos.focoAjuste;
+                    dados.estrategias.mixProdutos.impactoReceita = parseFloat(document.getElementById('mp-impacto-receita')?.value || estruturaPadrao.estrategias.mixProdutos.impactoReceita);
+                    dados.estrategias.mixProdutos.impactoMargem = parseFloat(document.getElementById('mp-impacto-margem')?.value || estruturaPadrao.estrategias.mixProdutos.impactoMargem);
+                }
+            }
+
+            // 6. Meios de Pagamento (mp-pag) - Using 'mpg-' prefix for fields as discussed.
+            const mpgAtivarElement = document.getElementById('mp-pag-ativar'); // ID from prompt
+            if (mpgAtivarElement) {
+                dados.estrategias.meiosPagamento.ativar = mpgAtivarElement.value === '1';
+                if (dados.estrategias.meiosPagamento.ativar) {
+                    dados.estrategias.meiosPagamento.distribuicaoAtual.vista = parseFloat(document.getElementById('mpg-dist-atual-vista')?.value || estruturaPadrao.estrategias.meiosPagamento.distribuicaoAtual.vista);
+                    dados.estrategias.meiosPagamento.distribuicaoAtual.prazo = parseFloat(document.getElementById('mpg-dist-atual-prazo')?.value || estruturaPadrao.estrategias.meiosPagamento.distribuicaoAtual.prazo);
+                    dados.estrategias.meiosPagamento.distribuicaoNova.vista = parseFloat(document.getElementById('mpg-dist-nova-vista')?.value || estruturaPadrao.estrategias.meiosPagamento.distribuicaoNova.vista);
+                    dados.estrategias.meiosPagamento.distribuicaoNova.dias30 = parseFloat(document.getElementById('mpg-dist-nova-30d')?.value || estruturaPadrao.estrategias.meiosPagamento.distribuicaoNova.dias30);
+                    dados.estrategias.meiosPagamento.distribuicaoNova.dias60 = parseFloat(document.getElementById('mpg-dist-nova-60d')?.value || estruturaPadrao.estrategias.meiosPagamento.distribuicaoNova.dias60);
+                    dados.estrategias.meiosPagamento.distribuicaoNova.dias90 = parseFloat(document.getElementById('mpg-dist-nova-90d')?.value || estruturaPadrao.estrategias.meiosPagamento.distribuicaoNova.dias90);
+                    dados.estrategias.meiosPagamento.taxaIncentivo = parseFloat(document.getElementById('mpg-taxa-incentivo')?.value || estruturaPadrao.estrategias.meiosPagamento.taxaIncentivo);
+                }
+            }
             
             // Cumpensação
             dados.parametrosFinanceiros.tipoCompensacao = document.getElementById('compensacao')?.value || 'automatica';

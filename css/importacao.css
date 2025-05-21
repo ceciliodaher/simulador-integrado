@@ -1,0 +1,70 @@
+/* Estilos para o módulo de importação SPED */
+.import-container {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+.import-header {
+    margin-bottom: 20px;
+}
+
+.file-selector {
+    margin-bottom: 25px;
+}
+
+.file-input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+}
+
+.import-options {
+    margin-bottom: 25px;
+}
+
+.log-area {
+    min-height: 150px;
+    max-height: 300px;
+    overflow-y: auto;
+    background-color: #f8f9fa;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+.log-success {
+    color: #28a745;
+}
+
+.log-error {
+    color: #dc3545;
+}
+
+.log-warning {
+    color: #ffc107;
+}
+
+.log-info {
+    color: #17a2b8;
+}
+
+.import-progress {
+    margin: 15px 0;
+    height: 20px;
+    background-color: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: #007bff;
+    width: 0%;
+    transition: width 0.3s ease-in-out;
+}

@@ -63,3 +63,65 @@
 .call-to-action button.secondary:hover {
     background-color: #f0f7ff;
 }
+
+/* Ajustes para a área de gráficos de estratégias */
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    margin-top: 20px;
+    margin-bottom: 30px;
+}
+
+.chart-container {
+    min-height: 300px;
+    position: relative;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Estilo para os resultados de estratégias */
+#resultados-estrategias {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #fff;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Estilos específicos para tabela de estratégias */
+.estrategias-tabela {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    font-size: 14px;
+}
+
+.estrategias-tabela th, 
+.estrategias-tabela td {
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid #ddd;
+}
+
+.estrategias-tabela th {
+    background-color: #f8f9fa;
+    font-weight: bold;
+}
+
+.estrategias-tabela tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.estrategias-detalhe {
+    margin-top: 20px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+.estrategias-detalhe h5 {
+    margin-bottom: 10px;
+    font-weight: bold;
+}

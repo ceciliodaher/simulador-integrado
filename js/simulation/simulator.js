@@ -384,8 +384,8 @@ const SimuladorFluxoCaixa = {
 
             // 5. Obter parametros setoriais em formato próprio para cálculos
             const parametrosSetoriais = {
-                cbs: dadosValidados.ivaConfig?.cbs,
-                ibs: dadosValidados.ivaConfig?.ibs,
+                aliquotaCBS: dadosValidados.ivaConfig?.cbs,
+                aliquotaIBS: dadosValidados.ivaConfig?.ibs,
                 categoriaIva: dadosValidados.ivaConfig?.categoriaIva,
                 reducaoEspecial: dadosValidados.ivaConfig?.reducaoEspecial,
                 cronogramaProprio: false // Valor padrão, ajustar conforme necessário
@@ -403,6 +403,43 @@ const SimuladorFluxoCaixa = {
             } catch (erroImpacto) {
                 console.error('Erro ao calcular impacto base:', erroImpacto);
                 impactoBase = this.gerarImpactoBaseFallback(dadosPlanos);
+            }
+
+            // Garantir que resultadoIVASemSplit existe
+            if (!impactoBase.resultadoIVASemSplit) {
+                // Criar uma cópia do resultado atual como base
+                impactoBase.resultadoIVASemSplit = JSON.parse(JSON.stringify(impactoBase.resultadoAtual));
+                impactoBase.resultadoIVASemSplit.descricao = "Sistema IVA Dual sem Split Payment";
+
+                // Se temos resultados de impostos IVA, usar esses valores
+                if (impactoBase.resultadoSplitPayment && impactoBase.resultadoSplitPayment.impostos) {
+                    impactoBase.resultadoIVASemSplit.impostos = impactoBase.resultadoSplitPayment.impostos;
+                    impactoBase.resultadoIVASemSplit.valorImpostoTotal = 
+                        impactoBase.resultadoSplitPayment.impostos.total || 0;
+
+                    // Calcular o capital de giro para IVA sem Split
+                    impactoBase.resultadoIVASemSplit.capitalGiroDisponivel = impactoBase.resultadoAtual.capitalGiroDisponivel * 
+                        (impactoBase.resultadoSplitPayment.impostos.total / (impactoBase.resultadoAtual.impostos?.total || 1));
+                }
+
+                // Adicionar diferenças e percentuais específicos para IVA sem Split
+                if (!impactoBase.diferencaCapitalGiroIVASemSplit) {
+                    impactoBase.diferencaCapitalGiroIVASemSplit = 
+                        impactoBase.resultadoIVASemSplit.capitalGiroDisponivel - 
+                        impactoBase.resultadoAtual.capitalGiroDisponivel;
+                }
+
+                if (!impactoBase.percentualImpactoIVASemSplit) {
+                    impactoBase.percentualImpactoIVASemSplit = 
+                        impactoBase.resultadoAtual.capitalGiroDisponivel !== 0 ? 
+                        (impactoBase.diferencaCapitalGiroIVASemSplit / impactoBase.resultadoAtual.capitalGiroDisponivel) * 100 : 0;
+                }
+
+                // Calcular a necessidade adicional de capital de giro para IVA sem Split
+                if (!impactoBase.necessidadeAdicionalCapitalGiroIVASemSplit) {
+                    impactoBase.necessidadeAdicionalCapitalGiroIVASemSplit = 
+                        Math.abs(impactoBase.diferencaCapitalGiroIVASemSplit) * 1.2;
+                }
             }
 
             // 7. Calcular projeção temporal com fallback
@@ -428,16 +465,64 @@ const SimuladorFluxoCaixa = {
                     },
                     impactoAcumulado: {
                         totalNecessidadeCapitalGiro:
-                            (impactoBase.necesidadeAdicionalCapitalGiro || 0) *
+                            (impactoBase.necessidadeAdicionalCapitalGiro || 0) *
                             (anoFinal - anoInicial + 1),
                         custoFinanceiroTotal:
-                            (impactoBase.necesidadeAdicionalCapitalGiro || 0) *
+                            (impactoBase.necessidadeAdicionalCapitalGiro || 0) *
                             (dadosPlanos.taxaCapitalGiro || 0.021) *
                             12 *
                             (anoFinal - anoInicial + 1),
                         impactoMedioMargem: impactoBase.impactoMargem || 0
+                    },
+                    resultadosAnuais: {}, // Objeto vazio para evitar erros de acesso
+                    comparacaoRegimes: {  // Estrutura mínima para evitar erros no chartManager
+                        anos: [anoInicial, anoFinal],
+                        atual: { capitalGiro: [impactoBase.resultadoAtual?.capitalGiroDisponivel || 0, 0], impostos: [0, 0] },
+                        splitPayment: { capitalGiro: [impactoBase.resultadoSplitPayment?.capitalGiroDisponivel || 0, 0], impostos: [0, 0] },
+                        ivaSemSplit: { capitalGiro: [impactoBase.resultadoIVASemSplit?.capitalGiroDisponivel || 0, 0], impostos: [0, 0] },
+                        impacto: { 
+                            diferencaCapitalGiro: [impactoBase.diferencaCapitalGiro || 0, 0], 
+                            percentualImpacto: [impactoBase.percentualImpacto || 0, 0], 
+                            necessidadeAdicional: [impactoBase.necessidadeAdicionalCapitalGiro || 0, 0] 
+                        }
                     }
                 };
+            }
+
+            // Garantir que a projeção temporal possui informações para IVA sem Split
+            if (projecaoTemporal.resultadosAnuais) {
+                Object.keys(projecaoTemporal.resultadosAnuais).forEach(ano => {
+                    const resultadoAno = projecaoTemporal.resultadosAnuais[ano];
+
+                    if (!resultadoAno.resultadoIVASemSplit) {
+                        resultadoAno.resultadoIVASemSplit = JSON.parse(JSON.stringify(resultadoAno.resultadoAtual));
+                        resultadoAno.resultadoIVASemSplit.descricao = "Sistema IVA Dual sem Split Payment";
+
+                        if (resultadoAno.resultadoSplitPayment && resultadoAno.resultadoSplitPayment.impostos) {
+                            resultadoAno.resultadoIVASemSplit.impostos = resultadoAno.resultadoSplitPayment.impostos;
+                            resultadoAno.resultadoIVASemSplit.valorImpostoTotal = 
+                                resultadoAno.resultadoSplitPayment.impostos.total || 0;
+
+                            // Calcular o capital de giro para IVA sem Split
+                            resultadoAno.resultadoIVASemSplit.capitalGiroDisponivel = resultadoAno.resultadoAtual.capitalGiroDisponivel * 
+                                (resultadoAno.resultadoSplitPayment.impostos.total / (resultadoAno.resultadoAtual.impostos?.total || 1));
+                        }
+                    }
+
+                    if (!resultadoAno.diferencaCapitalGiroIVASemSplit) {
+                        resultadoAno.diferencaCapitalGiroIVASemSplit = 
+                            (resultadoAno.resultadoIVASemSplit.capitalGiroDisponivel || 0) - 
+                            (resultadoAno.resultadoAtual.capitalGiroDisponivel || 0);
+
+                        resultadoAno.percentualImpactoIVASemSplit = 
+                            resultadoAno.resultadoAtual.capitalGiroDisponivel !== 0 ? 
+                            (resultadoAno.diferencaCapitalGiroIVASemSplit / resultadoAno.resultadoAtual.capitalGiroDisponivel) * 100 : 0;
+
+                        // Calcular a necessidade adicional de capital de giro para IVA sem Split
+                        resultadoAno.necessidadeAdicionalCapitalGiroIVASemSplit = 
+                            Math.abs(resultadoAno.diferencaCapitalGiroIVASemSplit) * 1.2;
+                    }
+                });
             }
 
             // 8. Calcular análise de elasticidade
@@ -469,7 +554,9 @@ const SimuladorFluxoCaixa = {
                     dadosEntrada: window.DataManager.converterParaEstruturaAninhada(dadosPlanos),
                     impactoBase: {
                         diferencaCapitalGiro: impactoBase.diferencaCapitalGiro,
-                        percentualImpacto: impactoBase.percentualImpacto
+                        diferencaCapitalGiroIVASemSplit: impactoBase.diferencaCapitalGiroIVASemSplit,
+                        percentualImpacto: impactoBase.percentualImpacto,
+                        percentualImpactoIVASemSplit: impactoBase.percentualImpactoIVASemSplit
                     },
                     projecaoTemporal: {
                         parametros: projecaoTemporal.parametros
@@ -534,55 +621,150 @@ const SimuladorFluxoCaixa = {
 
             // 2. Obter configurações das estratégias via DataManager
             const dadosAninhados = window.DataManager.obterDadosDoFormulario();
-            const estrategiasConfiguradas = dadosAninhados.estrategias;
 
-            if (!estrategiasConfiguradas) {
-                throw new Error('Não foi possível obter configurações das estratégias');
+            // Validar estrutura aninhada antes de prosseguir
+            if (!dadosAninhados || !dadosAninhados.estrategias) {
+                throw new Error('Estrutura de dados inválida ou incompleta');
             }
 
-            // 3. Converter para formato plano
+            // 3. Converter para formato plano de forma segura
             const dadosPlanos = window.DataManager.converterParaEstruturaPlana(dadosAninhados);
 
-            // 4. Usar IVADualSystem para calcular efetividade
+            // 4. Usar IVADualSystem para calcular impacto base (para comparação)
             const impactoBase = window.IVADualSystem.calcularImpactoCapitalGiro(
                 dadosPlanos,
                 parseInt(dadosPlanos.dataInicial?.split('-')[0], 10) || 2026
             );
 
-            // 5. Calcular efetividade das estratégias
+            // 5. Filtrar estratégias ativas de forma explícita e robusta
+            const estrategiasAtivas = {};
+            let temEstrategiaAtiva = false;
+
+            // Verificação detalhada de cada estratégia
+            if (dadosAninhados.estrategias) {
+                Object.entries(dadosAninhados.estrategias).forEach(([chave, estrategia]) => {
+                    if (estrategia && estrategia.ativar === true) {
+                        estrategiasAtivas[chave] = estrategia;
+                        temEstrategiaAtiva = true;
+                        console.log(`Estratégia ativa: ${chave}`, estrategia);
+                    }
+                });
+            }
+
+            // Tratamento específico para caso sem estratégias ativas
+            if (!temEstrategiaAtiva) {
+                console.log('Nenhuma estratégia ativa encontrada');
+                const divResultados = document.getElementById('resultados-estrategias');
+                if (divResultados) {
+                    divResultados.innerHTML = '<p class="text-muted">Nenhuma estratégia de mitigação foi selecionada para simulação. Ative uma ou mais estratégias e simule novamente.</p>';
+                }
+
+                // Atualizar os gráficos para exibir estado vazio/inicial
+                if (typeof window.ChartManager !== 'undefined' && typeof window.ChartManager.renderizarGraficoEstrategias === 'function') {
+                    // Apenas passar o impactoBase para ter um contexto de comparação
+                    window.ChartManager.renderizarGraficoEstrategias(null, impactoBase);
+                }
+
+                // Retornar estrutura compatível com interface
+                return {
+                    semEstrategiasAtivas: true,
+                    mensagem: "Nenhuma estratégia ativa encontrada",
+                    efeitividadeCombinada: {
+                        efetividadePercentual: 0,
+                        mitigacaoTotal: 0,
+                        custoTotal: 0,
+                        custoBeneficio: 0
+                    },
+                    detalhesPorEstrategia: {}
+                };
+            }
+
+            // 6. Calcular efetividade das estratégias com as estratégias filtradas
             const resultadoEstrategias = window.IVADualSystem.calcularEfeitividadeMitigacao(
                 dadosPlanos,
-                estrategiasConfiguradas,
+                estrategiasAtivas,
                 parseInt(dadosPlanos.dataInicial?.split('-')[0], 10) || 2026
             );
 
-            // 6. Atualizar interface com resultados (elemento específico)
-            const divResultados = document.getElementById('resultados-estrategias');
-            if (divResultados) {
-                // Formatar e exibir resultados
-                let html = '<h4>Resultados das Estratégias</h4>';
-
-                // Detalhar impacto das estratégias
-                html += '<div class="estrategias-resumo">';
-                html += `<p><strong>Impacto Original:</strong> ${window.CalculationCore.formatarMoeda(Math.abs(impactoBase.diferencaCapitalGiro))}</p>`;
-                html += `<p><strong>Efetividade da Mitigação:</strong> ${resultadoEstrategias.efeitividadeCombinada.efetividadePercentual.toFixed(1)}%</p>`;
-                html += `<p><strong>Impacto Mitigado:</strong> ${window.CalculationCore.formatarMoeda(resultadoEstrategias.efeitividadeCombinada.mitigacaoTotal)}</p>`;
-                html += `<p><strong>Impacto Residual:</strong> ${window.CalculationCore.formatarMoeda(Math.abs(impactoBase.diferencaCapitalGiro) - resultadoEstrategias.efeitividadeCombinada.mitigacaoTotal)}</p>`;
-                html += '</div>';
-
-                // Mostrar custo das estratégias
-                html += '<div class="estrategias-custo">';
-                html += `<p><strong>Custo Total das Estratégias:</strong> ${window.CalculationCore.formatarMoeda(resultadoEstrategias.efeitividadeCombinada.custoTotal)}</p>`;
-                html += `<p><strong>Relação Custo-Benefício:</strong> ${resultadoEstrategias.efeitividadeCombinada.custoBeneficio.toFixed(2)}</p>`;
-                html += '</div>';
-
-                divResultados.innerHTML = html;
+            // Validar resultado para garantir segurança
+            if (!resultadoEstrategias || !resultadoEstrategias.efeitividadeCombinada) {
+                throw new Error('Cálculo de efetividade retornou resultado inválido');
             }
 
-            // 7. Atualizar gráfico de estratégias
+            // 7. Armazenar os resultados globalmente para referência futura
+            window.lastStrategyResults = resultadoEstrategias;
+
+            // 8. Atualizar interface com resultados estruturados
+            const divResultados = document.getElementById('resultados-estrategias');
+            if (divResultados) {
+                // Estruturar resultado como uma classe HTML específica para facilitar detecção
+                let html = '<div class="estrategias-resumo">';
+                html += '<h4>Resultados das Estratégias</h4>';
+
+                // Detalhar impacto das estratégias
+                const impactoOriginal = Math.abs(impactoBase.diferencaCapitalGiro || 0);
+                const efetividadePercentual = resultadoEstrategias.efeitividadeCombinada.efetividadePercentual || 0;
+                const mitigacaoTotal = resultadoEstrategias.efeitividadeCombinada.mitigacaoTotal || 0;
+                const impactoResidual = impactoOriginal - mitigacaoTotal;
+
+                html += `<p><strong>Impacto Original:</strong> ${window.CalculationCore.formatarMoeda(impactoOriginal)}</p>`;
+                html += `<p><strong>Efetividade da Mitigação:</strong> ${efetividadePercentual.toFixed(1)}%</p>`;
+                html += `<p><strong>Impacto Mitigado:</strong> ${window.CalculationCore.formatarMoeda(mitigacaoTotal)}</p>`;
+                html += `<p><strong>Impacto Residual:</strong> ${window.CalculationCore.formatarMoeda(impactoResidual)}</p>`;
+
+                // Seção de custo das estratégias
+                html += '<div class="estrategias-custo">';
+                html += `<p><strong>Custo Total das Estratégias:</strong> ${window.CalculationCore.formatarMoeda(resultadoEstrategias.efeitividadeCombinada.custoTotal || 0)}</p>`;
+                html += `<p><strong>Relação Custo-Benefício:</strong> ${(resultadoEstrategias.efeitividadeCombinada.custoBeneficio || 0).toFixed(2)}</p>`;
+                html += '</div>';
+
+                // Adicionar detalhamento por estratégia
+                if (resultadoEstrategias.resultadosEstrategias && Object.keys(resultadoEstrategias.resultadosEstrategias).length > 0) {
+                    html += '<div class="estrategias-detalhe">';
+                    html += '<h5>Detalhamento por Estratégia</h5>';
+                    html += '<table class="estrategias-tabela">';
+                    html += '<tr><th>Estratégia</th><th>Efetividade</th><th>Impacto Mitigado</th><th>Custo</th></tr>';
+
+                    Object.entries(resultadoEstrategias.resultadosEstrategias).forEach(([nome, resultado]) => {
+                        if (resultado) {
+                            const nomeFormatado = this.traduzirNomeEstrategia(nome);
+                            html += `<tr>
+                                <td>${nomeFormatado}</td>
+                                <td>${(resultado.efetividadePercentual || 0).toFixed(1)}%</td>
+                                <td>${window.CalculationCore.formatarMoeda(resultado.valorMitigado || 0)}</td>
+                                <td>${window.CalculationCore.formatarMoeda(resultado.custoImplementacao || 0)}</td>
+                            </tr>`;
+                        }
+                    });
+
+                    html += '</table>';
+                    html += '</div>';
+                }
+
+                html += '</div>'; // Fechamento da div estrategias-resumo
+
+                // Incluir log para diagnóstico
+                console.log("SIMULATOR.JS: [LOG ATIVADO] Conteúdo HTML gerado para resultados das estratégias:", html);
+
+                // Atribuir HTML ao elemento
+                divResultados.innerHTML = html;
+
+                // Verificar se a atribuição foi bem-sucedida
+                console.log("SIMULATOR.JS: [LOG ATIVADO] divResultados.innerHTML atribuído com sucesso.");
+            } else {
+                console.error("SIMULATOR.JS: [LOG ATIVADO] Elemento #resultados-estrategias não encontrado no DOM!");
+            }
+
+            // 9. Atualizar gráficos de estratégias
             if (typeof window.ChartManager !== 'undefined' && 
                 typeof window.ChartManager.renderizarGraficoEstrategias === 'function') {
-                window.ChartManager.renderizarGraficoEstrategias(resultadoEstrategias, impactoBase);
+                try {
+                    // Chamar com parâmetros explícitos
+                    window.ChartManager.renderizarGraficoEstrategias(resultadoEstrategias, impactoBase);
+                    console.log('Gráficos de estratégias renderizados com sucesso');
+                } catch (erroGraficos) {
+                    console.error('Erro ao renderizar gráficos de estratégias:', erroGraficos);
+                }
             }
 
             console.log('Simulação de estratégias concluída com sucesso');
@@ -592,6 +774,24 @@ const SimuladorFluxoCaixa = {
             alert('Ocorreu um erro durante a simulação de estratégias: ' + erro.message);
             return null;
         }
+    },
+    
+    /**
+     * Traduz o nome técnico da estratégia para um nome amigável
+     * @param {string} nomeTecnico - Nome técnico da estratégia
+     * @returns {string} Nome amigável para exibição
+     */
+    traduzirNomeEstrategia(nomeTecnico) {
+        const traducoes = {
+            'ajustePrecos': 'Ajuste de Preços',
+            'renegociacaoPrazos': 'Renegociação de Prazos',
+            'antecipacaoRecebiveis': 'Antecipação de Recebíveis',
+            'capitalGiro': 'Capital de Giro',
+            'mixProdutos': 'Mix de Produtos',
+            'meiosPagamento': 'Meios de Pagamento'
+        };
+
+        return traducoes[nomeTecnico] || nomeTecnico;
     },
 
     /**

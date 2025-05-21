@@ -94,16 +94,21 @@ window.IVADualSystem = (function() {
     function calcularCBS(baseValue, rate = aliquotasIVADual.cbs, credits = 0, taxCategory = 'standard') {
         let appliedRate;
 
+        // Melhorar a lógica de determinação de alíquota com base na categoria
         switch (taxCategory) {
             case 'reduced':
-                appliedRate = aliquotasIVADual.reduced.cbs;
+                // Categoria reduzida: 50% da alíquota padrão (ou usar valor explícito passado)
+                appliedRate = rate * 0.5; // Usa a rate específica do setor com redução
                 break;
             case 'exempt':
-                appliedRate = aliquotasIVADual.exempt.cbs;
+                appliedRate = 0; // Isento
                 break;
             default:
                 appliedRate = rate;
         }
+
+        // Adicionar log para depuração
+        console.log(`Calculando CBS: baseValue=${baseValue}, rate=${rate}, appliedRate=${appliedRate}, category=${taxCategory}`);
 
         const tax = baseValue * appliedRate;
         return Math.max(0, tax - credits);
@@ -112,27 +117,83 @@ window.IVADualSystem = (function() {
     /**
      * Calcula o IBS (Imposto sobre Bens e Serviços)
      * @param {number} baseValue - Valor base para cálculo
-     * @param {number} [rate=aliquotasIVADual.ibs] - Alíquota do IBS
-     * @param {number} [credits=0] - Créditos de IBS a serem descontados
-     * @param {string} [taxCategory='standard'] - Categoria tributária ('standard', 'reduced', 'exempt')
+     * @param {number} rate - Alíquota do IBS (valor decimal, ex: 0.177 para 17.7%)
+     * @param {number} credits - Créditos de IBS a serem descontados
+     * @param {string} taxCategory - Categoria tributária ('standard', 'reduced', 'exempt')
+     * @param {Object} options - Opções adicionais para o cálculo
      * @returns {number} Valor do IBS a recolher
      */
-    function calcularIBS(baseValue, rate = aliquotasIVADual.ibs, credits = 0, taxCategory = 'standard') {
+    function calcularIBS(baseValue, rate = aliquotasIVADual.ibs, credits = 0, taxCategory = 'standard', options = {}) {
+        // Validar e normalizar parâmetros
+        if (typeof baseValue !== 'number' || isNaN(baseValue)) {
+            console.warn('Valor base inválido para cálculo do IBS. Usando zero.');
+            baseValue = 0;
+        }
+
+        if (typeof rate !== 'number' || isNaN(rate)) {
+            console.warn(`Alíquota IBS inválida: ${rate}. Usando alíquota padrão.`);
+            rate = aliquotasIVADual.ibs;
+        }
+
+        if (typeof credits !== 'number' || isNaN(credits)) {
+            console.warn('Valor de créditos inválido. Usando zero.');
+            credits = 0;
+        }
+
+        // Determinar alíquota aplicável com base na categoria tributária
         let appliedRate;
+        let reducaoAdicional = options.reducaoEspecial || 0;
 
         switch (taxCategory) {
             case 'reduced':
-                appliedRate = aliquotasIVADual.reduced.ibs;
+                // Para categoria reduzida: 50% da alíquota normal
+                appliedRate = rate * 0.5;
+
+                // Log de depuração para categoria reduzida
+                console.log(`IBS: Aplicando redução para categoria 'reduced'. 
+                           Rate original: ${rate}, Rate aplicada: ${appliedRate}`);
                 break;
+
             case 'exempt':
-                appliedRate = aliquotasIVADual.exempt.ibs;
+                // Para categoria isenta: alíquota zero
+                appliedRate = 0;
+
+                // Log de depuração para isenção
+                console.log(`IBS: Aplicando isenção para categoria 'exempt'. 
+                           Rate aplicada: ${appliedRate}`);
                 break;
-            default:
+
+            default: // 'standard' ou qualquer outro valor
                 appliedRate = rate;
+
+                // Log de depuração para categoria padrão
+                console.log(`IBS: Aplicando alíquota padrão. Rate: ${appliedRate}`);
         }
 
+        // Aplicar redução adicional específica do setor, se houver
+        if (reducaoAdicional > 0) {
+            const rateAntes = appliedRate;
+            appliedRate = appliedRate * (1 - reducaoAdicional);
+
+            // Log de depuração para redução adicional
+            console.log(`IBS: Aplicando redução adicional de ${reducaoAdicional*100}%. 
+                       Rate antes: ${rateAntes}, Rate depois: ${appliedRate}`);
+        }
+
+        // Cálculo do imposto
         const tax = baseValue * appliedRate;
-        return Math.max(0, tax - credits);
+
+        // Aplicação de créditos
+        const taxAfterCredits = Math.max(0, tax - credits);
+
+        // Log de depuração do cálculo final
+        console.log(`IBS: Cálculo final - Base: ${baseValue}, 
+                   Alíquota aplicada: ${appliedRate}, 
+                   Imposto bruto: ${tax}, 
+                   Créditos: ${credits}, 
+                   Imposto líquido: ${taxAfterCredits}`);
+
+        return taxAfterCredits;
     }
 
     /**
@@ -243,7 +304,7 @@ window.IVADualSystem = (function() {
             credits: creditsObject
         });
 
-        // Calcular tempo médio do capital em giro (usando a versão do DataManager)
+        // Calcular tempo médio do capital em giro
         let tempoMedioCapitalGiro;
         if (window.DataManager.calcularTempoMedioCapitalGiro) {
             tempoMedioCapitalGiro = window.DataManager.calcularTempoMedioCapitalGiro(pmr, prazoRecolhimento, percVista, percPrazo);
@@ -260,25 +321,29 @@ window.IVADualSystem = (function() {
 
         // Se o ano estiver no período de transição para o IVA Dual, calcular impostos de transição
         let impostosIVA = null;
-        //if (ano >= periodosTransicao.cbs.start) {
-        // Substituir esta linha:
-        // if (ano >= periodosTransicao.cbs.start) {
-        // Por:
-        if (ano >= 2026) { // Para fins de simulação/demonstração
-            // Calcular os impostos do sistema IVA Dual
-            // Calcular os impostos do sistema IVA Dual
-            impostosIVA = calcularTotalIVA(
-                faturamento,
-                {
-                    cbs: dados.aliquotaCBS || aliquotasIVADual.cbs,
-                    ibs: dados.aliquotaIBS || aliquotasIVADual.ibs
-                },
-                {
-                    cbs: dados.creditosCBS || 0,
-                    ibs: dados.creditosIBS || 0
-                },
-                dados.categoriaIVA || 'standard'
+        // Apenas calcular se não foi fornecido nos parâmetros
+        if (ano >= 2026 && !arguments[4]?.impostosIVA) {
+            const parametrosSetoriaisIVA = {
+                aliquotaCBS: dados.aliquotaCBS,
+                aliquotaIBS: dados.aliquotaIBS,
+                categoriaIva: dados.categoriaIVA,
+                reducaoEspecial: dados.reducaoEspecial
+            };
+
+            // Usar calcularTransicaoIVADual para consistência
+            impostosIVA = calcularTransicaoIVADual(
+                faturamento, 
+                ano, 
+                // Passar impostos atuais vazios se não disponíveis
+                { total: 0, pis: 0, cofins: 0, icms: 0, ipi: 0 },
+                { 
+                    parametrosSetoriais: parametrosSetoriaisIVA,
+                    dados: dados
+                }
             );
+        } else if (arguments[4]?.impostosIVA) {
+            // Usar impostos precalculados se fornecidos
+            impostosIVA = arguments[4].impostosIVA;
         }
 
         // Gerar memória crítica usando DataManager se disponível
@@ -378,89 +443,136 @@ window.IVADualSystem = (function() {
             return calcularImpactoCapitalGiroSimplificado(dados, ano, parametrosSetoriais);
         }
 
-        // Adicionar esta verificação para considerar a opção de desabilitar o split-payment
-        const considerarSplitPayment = dados.splitPayment !== false; // Se não especificado, assume true
+        // Adicionar esta verificação explícita para a opção de Split Payment
+        const considerarSplitPayment = dados.splitPayment !== false; // Default: true
 
         try {
-            // Calcular fluxo de caixa nos dois regimes usando funções do sistema
+            // Calcular fluxo de caixa no regime atual
             const resultadoAtual = window.CurrentTaxSystem.calcularFluxoCaixaAtual(
                 dados, 
                 { isRecursiveCall: true }
             );
 
-            // Se split-payment não for considerado, usar apenas o regime atual para ambos
+            // Calcular impostos no sistema IVA Dual, independentemente da opção Split Payment
+            let resultadoImpostosIVA = null;
+
+            // Verificar se temos impostos atuais calculados
+            if (resultadoAtual.impostos) {
+                // Preparar os parâmetros setoriais completos
+                const parametrosSetoriaisCompletos = {
+                    cronogramaProprio: parametrosSetoriais?.cronogramaProprio || dados.cronogramaProprio || false,
+                    cronograma: parametrosSetoriais?.cronograma || dados.cronogramaImplementacao || null,
+                    aliquotaCBS: parametrosSetoriais?.aliquotaCBS || dados.aliquotaCBS,
+                    aliquotaIBS: parametrosSetoriais?.aliquotaIBS || dados.aliquotaIBS,
+                    categoriaIva: parametrosSetoriais?.categoriaIva || dados.categoriaIVA,
+                    reducaoEspecial: parametrosSetoriais?.reducaoEspecial || dados.reducaoEspecial
+                };
+
+                // Calcular impostos IVA Dual considerando parâmetros setoriais
+                resultadoImpostosIVA = calcularTransicaoIVADual(
+                    dados.faturamento, 
+                    ano, 
+                    resultadoAtual.impostos,
+                    { 
+                        parametrosSetoriais: parametrosSetoriaisCompletos,
+                        dados: dados  // Passar dados completos para referência
+                    }
+                );
+            }
+
+            // Determinar como calcular o resultado com Split Payment
             let resultadoSplitPayment;
+            let resultadoIVASemSplit;
+
+            // Criar o cenário IVA sem Split explicitamente
+            resultadoIVASemSplit = JSON.parse(JSON.stringify(resultadoAtual));
+            resultadoIVASemSplit.descricao = "Sistema IVA Dual sem Split Payment";
+
+            // Aplicar impostos IVA ao resultado sem Split
+            if (resultadoImpostosIVA) {
+                resultadoIVASemSplit.impostos = resultadoImpostosIVA;
+                resultadoIVASemSplit.valorImpostoTotal = resultadoImpostosIVA.total || 0;
+                resultadoIVASemSplit.valorImpostoLiquido = resultadoImpostosIVA.total || 0;
+
+                // Importante: no IVA sem Split, o capital de giro disponível é o mesmo do regime atual
+                // O efeito é apenas na alteração do valor dos impostos
+            }
+
             if (considerarSplitPayment) {
+                // Calcular fluxo de caixa com Split Payment ativado
                 resultadoSplitPayment = calcularFluxoCaixaSplitPayment(
                     dados, 
                     ano, 
                     parametrosSetoriais, 
-                    { isRecursiveCall: true }
+                    { isRecursiveCall: true },
+                    { impostosIVA: resultadoImpostosIVA } // Passar os impostos já calculados
                 );
-            } else {
-                // Se não considerar split-payment, usar o regime atual como base, mas ajustar para o novo sistema tributário
-                resultadoSplitPayment = JSON.parse(JSON.stringify(resultadoAtual));
 
-                // Atualizar descrição para indicar que é sem Split Payment
-                resultadoSplitPayment.descricao = "Sistema IVA Dual sem Split Payment";
-
-                // Aplicar apenas as mudanças do sistema tributário, sem o mecanismo de Split Payment
-                // Considerar a transição gradual das alíquotas
-                if (resultadoSplitPayment.impostos) {
-                    resultadoSplitPayment.impostos = calcularTransicaoIVADual(
-                        dados.faturamento, 
-                        ano, 
-                        resultadoSplitPayment.impostos,
-                        { parametrosSetoriais }
-                    );
+                // Garantir que o resultado use os impostos calculados corretamente
+                if (resultadoImpostosIVA && resultadoSplitPayment) {
+                    resultadoSplitPayment.impostos = resultadoImpostosIVA;
                 }
+
+                // Recalcular explicitamente o capital de giro disponível com Split Payment
+                const percentualImplementacao = window.CurrentTaxSystem.obterPercentualImplementacao(ano, parametrosSetoriais);
+                const valorImpostoTotal = resultadoImpostosIVA?.total || 0;
+                const valorImpostoSplit = valorImpostoTotal * percentualImplementacao;
+
+                // No regime Split Payment, o capital de giro disponível é reduzido pelo valor do imposto afetado pelo Split
+                resultadoSplitPayment.capitalGiroDisponivel = resultadoAtual.capitalGiroDisponivel - valorImpostoSplit;
+
+                // Log para diagnóstico
+                console.log(`Recalculando capital de giro com Split Payment: Percentual=${percentualImplementacao*100}%, Imposto Total=${valorImpostoTotal}, Imposto Split=${valorImpostoSplit}, Capital Giro Final=${resultadoSplitPayment.capitalGiroDisponivel}`);
+            } else {
+                // Split Payment desativado: usar regime atual como base, mas atualizar para impostos IVA
+                resultadoSplitPayment = resultadoIVASemSplit;
             }
 
             // Validar resultados obtidos
-            if (!resultadoAtual || !resultadoSplitPayment) {
+            if (!resultadoAtual || !resultadoSplitPayment || !resultadoIVASemSplit) {
                 throw new Error('Erro ao calcular os fluxos de caixa necessários para a análise');
             }
 
             // Calcular diferenças de capital de giro
             const diferencaCapitalGiro = resultadoSplitPayment.capitalGiroDisponivel - resultadoAtual.capitalGiroDisponivel;
+            const diferencaCapitalGiroIVASemSplit = resultadoIVASemSplit.capitalGiroDisponivel - resultadoAtual.capitalGiroDisponivel;
 
             // Calcular percentual de impacto, protegendo contra divisão por zero
             let percentualImpacto = 0;
+            let percentualImpactoIVASemSplit = 0;
+
             if (resultadoAtual.capitalGiroDisponivel !== 0) {
                 percentualImpacto = (diferencaCapitalGiro / resultadoAtual.capitalGiroDisponivel) * 100;
+                percentualImpactoIVASemSplit = (diferencaCapitalGiroIVASemSplit / resultadoAtual.capitalGiroDisponivel) * 100;
             }
 
             // Calcular necessidade adicional de capital de giro (com fator de segurança)
             const fatorSeguranca = 1.2; // 20% de margem de segurança
-            const necesidadeAdicionalCapitalGiro = Math.abs(diferencaCapitalGiro) * fatorSeguranca;
+            const necessidadeAdicionalCapitalGiro = Math.abs(diferencaCapitalGiro) * fatorSeguranca;
+            const necessidadeAdicionalCapitalGiroIVASemSplit = Math.abs(diferencaCapitalGiroIVASemSplit) * fatorSeguranca;
 
             // Impacto em dias de faturamento
             const impactoDiasFaturamento = resultadoAtual.beneficioDiasCapitalGiro - resultadoSplitPayment.beneficioDiasCapitalGiro;
+            const impactoDiasFaturamentoIVASemSplit = resultadoAtual.beneficioDiasCapitalGiro - resultadoIVASemSplit.beneficioDiasCapitalGiro;
 
             // Extrair e normalizar parâmetros para cálculo de impacto na margem
             const faturamento = window.DataManager.extrairValorNumerico(dados.faturamento);
-            const margem = dados.margem > 1 ? dados.margem / 100 : dados.margem; // Normalizar percentual
+            const margem = dados.margem > 1 ? dados.margem / 100 : (dados.margem || 0.15);
             const taxaCapitalGiro = dados.taxaCapitalGiro > 1 ? dados.taxaCapitalGiro / 100 : 
                                    (dados.taxaCapitalGiro || 0.021); // Valor padrão: 2,1% a.m.
 
-            // Calcular impacto na margem operacional
+            // Calcular impacto na margem operacional para Split Payment
             const custoMensalCapitalGiro = Math.abs(diferencaCapitalGiro) * taxaCapitalGiro;
             const custoAnualCapitalGiro = custoMensalCapitalGiro * 12;
+            const impactoPercentual = faturamento > 0 ? (custoMensalCapitalGiro / faturamento) * 100 : 0;
+            const margemAjustada = Math.max(0, margem - (impactoPercentual / 100));
+            const percentualReducaoMargem = margem > 0 ? (impactoPercentual / (margem * 100)) * 100 : 0;
 
-            // Calcular impacto percentual na margem, protegendo contra divisão por zero
-            let impactoPercentual = 0;
-            if (faturamento > 0) {
-                impactoPercentual = (custoMensalCapitalGiro / faturamento) * 100;
-            }
-
-            // Calcular margem ajustada
-            const margemAjustada = margem - (impactoPercentual / 100);
-
-            // Calcular percentual de redução da margem, protegendo contra divisão por zero
-            let percentualReducaoMargem = 0;
-            if (margem > 0) {
-                percentualReducaoMargem = (impactoPercentual / (margem * 100)) * 100;
-            }
+            // Calcular impacto na margem para IVA sem Split
+            const custoMensalCapitalGiroIVASemSplit = Math.abs(diferencaCapitalGiroIVASemSplit) * taxaCapitalGiro;
+            const custoAnualCapitalGiroIVASemSplit = custoMensalCapitalGiroIVASemSplit * 12;
+            const impactoPercentualIVASemSplit = faturamento > 0 ? (custoMensalCapitalGiroIVASemSplit / faturamento) * 100 : 0;
+            const margemAjustadaIVASemSplit = Math.max(0, margem - (impactoPercentualIVASemSplit / 100));
 
             // Criar objeto com impacto detalhado na margem
             const impactoMargemDetalhado = {
@@ -472,20 +584,58 @@ window.IVADualSystem = (function() {
                 percentualReducaoMargem
             };
 
-            // Compilar o resultado completo
+            const impactoMargemDetalhadoIVASemSplit = {
+                custoMensalCapitalGiro: custoMensalCapitalGiroIVASemSplit,
+                custoAnualCapitalGiro: custoAnualCapitalGiroIVASemSplit,
+                impactoPercentual: impactoPercentualIVASemSplit,
+                margemOriginal: margem,
+                margemAjustada: margemAjustadaIVASemSplit,
+                percentualReducaoMargem: margem > 0 ? (impactoPercentualIVASemSplit / (margem * 100)) * 100 : 0
+            };
+
+            // Inicializar o objeto resultado com um objeto impactoBase vazio
             const resultado = {
                 ano,
                 resultadoAtual,
                 resultadoSplitPayment,
+                resultadoIVASemSplit,
                 diferencaCapitalGiro,
+                diferencaCapitalGiroIVASemSplit,
                 percentualImpacto,
-                necesidadeAdicionalCapitalGiro,
+                percentualImpactoIVASemSplit,
+                necessidadeAdicionalCapitalGiro,
+                necessidadeAdicionalCapitalGiroIVASemSplit,
                 impactoDiasFaturamento,
+                impactoDiasFaturamentoIVASemSplit,
                 margemOperacionalOriginal: margem,
                 margemOperacionalAjustada: margemAjustada,
+                margemOperacionalAjustadaIVASemSplit: margemAjustadaIVASemSplit,
                 impactoMargem: impactoPercentual,
+                impactoMargemIVASemSplit: impactoPercentualIVASemSplit,
                 impactoMargemDetalhado,
-                splitPaymentConsiderado: considerarSplitPayment
+                impactoMargemDetalhadoIVASemSplit,
+                splitPaymentConsiderado: considerarSplitPayment,
+                impactoBase: {}
+            };
+
+            // Inicializar adequadamente resultado.impactoBase para evitar o erro
+            resultado.impactoBase = {
+                resultadoAtual: resultadoAtual,
+                resultadoSplitPayment: resultadoSplitPayment,
+                resultadoIVASemSplit: resultadoIVASemSplit,
+                diferencaCapitalGiro: diferencaCapitalGiro,
+                diferencaCapitalGiroIVASemSplit: diferencaCapitalGiroIVASemSplit,
+                percentualImpacto: percentualImpacto,
+                percentualImpactoIVASemSplit: percentualImpactoIVASemSplit,
+                necessidadeAdicionalCapitalGiro: necessidadeAdicionalCapitalGiro,
+                necessidadeAdicionalCapitalGiroIVASemSplit: necessidadeAdicionalCapitalGiroIVASemSplit,
+                impactoDiasFaturamento: impactoDiasFaturamento,
+                impactoDiasFaturamentoIVASemSplit: impactoDiasFaturamentoIVASemSplit,
+                margemOperacionalOriginal: margem,
+                margemOperacionalAjustada: margemAjustada,
+                margemOperacionalAjustadaIVASemSplit: margemAjustadaIVASemSplit,
+                impactoMargem: impactoPercentual,
+                impactoMargemIVASemSplit: impactoPercentualIVASemSplit
             };
 
             // Adicionar análise de sensibilidade ao resultado
@@ -531,6 +681,8 @@ window.IVADualSystem = (function() {
         const margem = dados.margem > 1 ? dados.margem / 100 : (dados.margem || 0.15);
         const taxaCapitalGiro = dados.taxaCapitalGiro > 1 ? dados.taxaCapitalGiro / 100 : 
                                (dados.taxaCapitalGiro || 0.021);
+        
+        const considerarSplitPayment = dados.splitPayment !== false; // Default: true
 
         // Obter percentual de implementação
         const percentualImplementacao = window.CurrentTaxSystem.obterPercentualImplementacao(
@@ -541,7 +693,7 @@ window.IVADualSystem = (function() {
         // Cálculos simplificados
         const valorImpostoTotal = faturamento * aliquota;
         const diferencaCapitalGiro = -valorImpostoTotal * percentualImplementacao;
-        const necesidadeAdicionalCapitalGiro = Math.abs(diferencaCapitalGiro) * 1.2;
+        const necessidadeAdicionalCapitalGiro = Math.abs(diferencaCapitalGiro) * 1.2;
         const impactoDiasFaturamento = 15 * percentualImplementacao;
 
         // Impacto na margem
@@ -553,7 +705,7 @@ window.IVADualSystem = (function() {
         return {
             diferencaCapitalGiro,
             percentualImpacto: -100 * percentualImplementacao,
-            necesidadeAdicionalCapitalGiro,
+            necessidadeAdicionalCapitalGiro,
             impactoDiasFaturamento,
             margemOperacionalOriginal: margem,
             margemOperacionalAjustada: margem - (impactoPercentual / 100),
@@ -610,7 +762,7 @@ window.IVADualSystem = (function() {
 
         // Extrair dados relevantes
         const diferencaCapitalGiro = impacto.diferencaCapitalGiro;
-        const necesidadeBasica = Math.abs(diferencaCapitalGiro);
+        const necessidadeBasica = Math.abs(diferencaCapitalGiro);
 
         // Fatores de ajuste para cálculo da necessidade
         const fatorMargemSeguranca = 1.2; // 20% de margem de segurança
@@ -618,12 +770,12 @@ window.IVADualSystem = (function() {
         const fatorCrescimento = window.CalculationCore.calcularFatorCrescimento(dados, ano);
 
         // Cálculo da necessidade com diferentes fatores
-        const necessidadeComMargemSeguranca = necesidadeBasica * fatorMargemSeguranca;
-        const necessidadeComSazonalidade = necesidadeBasica * fatorSazonalidade;
-        const necessidadeComCrescimento = necesidadeBasica * fatorCrescimento;
+        const necessidadeComMargemSeguranca = necessidadeBasica * fatorMargemSeguranca;
+        const necessidadeComSazonalidade = necessidadeBasica * fatorSazonalidade;
+        const necessidadeComCrescimento = necessidadeBasica * fatorCrescimento;
 
         // Necessidade total considerando todos os fatores
-        const necessidadeTotal = necesidadeBasica * fatorMargemSeguranca * fatorSazonalidade * fatorCrescimento;
+        const necessidadeTotal = necessidadeBasica * fatorMargemSeguranca * fatorSazonalidade * fatorCrescimento;
 
         // Opções de captação
         const opcoesFinanciamento = window.CalculationCore.calcularOpcoesFinanciamento(dados, necessidadeTotal);
@@ -633,7 +785,7 @@ window.IVADualSystem = (function() {
 
         // Resultado completo
         const resultado = {
-            necesidadeBasica,
+            necessidadeBasica,
             fatorMargemSeguranca,
             fatorSazonalidade,
             fatorCrescimento,
@@ -718,6 +870,28 @@ window.IVADualSystem = (function() {
                 impactoMedioMargem: 0
             };
 
+            // Adicionar estrutura para comparação entre regimes
+            const comparacaoRegimes = {
+                anos: [],
+                atual: {
+                    capitalGiro: [],
+                    impostos: []
+                },
+                splitPayment: {
+                    capitalGiro: [],
+                    impostos: []
+                },
+                ivaSemSplit: {
+                    capitalGiro: [],
+                    impostos: []
+                },
+                impacto: {
+                    diferencaCapitalGiro: [],
+                    percentualImpacto: [],
+                    necessidadeAdicional: []
+                }
+            };
+
             // Criar cópia dos dados para manipulação
             let dadosAno = JSON.parse(JSON.stringify(dados));
             let somaImpactoMargem = 0;
@@ -727,13 +901,67 @@ window.IVADualSystem = (function() {
                 // Calcular impacto para o ano atual
                 const impactoAno = calcularImpactoCapitalGiro(dadosAno, ano, parametrosSetoriais);
 
+                // INÍCIO DA MODIFICAÇÃO
+                // Garantir que o resultado IVA sem Split existe para cada ano
+                if (!impactoAno.resultadoIVASemSplit) {
+                    // Criar uma cópia do resultado atual como base
+                    impactoAno.resultadoIVASemSplit = JSON.parse(JSON.stringify(impactoAno.resultadoAtual));
+                    impactoAno.resultadoIVASemSplit.descricao = "Sistema IVA Dual sem Split Payment";
+
+                    // Se temos resultados de impostos IVA, usar esses valores
+                    if (impactoAno.resultadoSplitPayment && impactoAno.resultadoSplitPayment.impostos) {
+                        impactoAno.resultadoIVASemSplit.impostos = impactoAno.resultadoSplitPayment.impostos;
+                        impactoAno.resultadoIVASemSplit.valorImpostoTotal = 
+                            impactoAno.resultadoSplitPayment.impostos.total || 0;
+                    }
+                }
+                // FIM DA MODIFICAÇÃO
+
                 // Armazenar resultado do ano
                 resultadosAnuais[ano] = impactoAno;
 
                 // Acumular valores para análise global
-                impactoAcumulado.totalNecessidadeCapitalGiro += impactoAno.necesidadeAdicionalCapitalGiro;
-                impactoAcumulado.custoFinanceiroTotal += impactoAno.impactoMargemDetalhado.custoAnualCapitalGiro;
-                somaImpactoMargem += impactoAno.impactoMargem;
+                impactoAcumulado.totalNecessidadeCapitalGiro += impactoAno.necessidadeAdicionalCapitalGiro || 0;
+                impactoAcumulado.custoFinanceiroTotal += impactoAno.impactoMargemDetalhado?.custoAnualCapitalGiro || 0;
+                somaImpactoMargem += impactoAno.impactoMargem || 0;
+
+                // Adicionar dados comparativos para gráficos
+                comparacaoRegimes.anos.push(ano);
+
+                // Dados do regime atual
+                comparacaoRegimes.atual.capitalGiro.push(
+                    impactoAno.resultadoAtual?.capitalGiroDisponivel || 0
+                );
+                comparacaoRegimes.atual.impostos.push(
+                    impactoAno.resultadoAtual?.impostos?.total || 0
+                );
+
+                // Dados do regime com Split Payment
+                comparacaoRegimes.splitPayment.capitalGiro.push(
+                    impactoAno.resultadoSplitPayment?.capitalGiroDisponivel || 0
+                );
+                comparacaoRegimes.splitPayment.impostos.push(
+                    impactoAno.resultadoSplitPayment?.impostos?.total || 0
+                );
+
+                // Dados do regime IVA sem Split Payment
+                comparacaoRegimes.ivaSemSplit.capitalGiro.push(
+                    impactoAno.resultadoIVASemSplit?.capitalGiroDisponivel || 0
+                );
+                comparacaoRegimes.ivaSemSplit.impostos.push(
+                    impactoAno.resultadoIVASemSplit?.impostos?.total || 0
+                );
+
+                // Dados de impacto
+                comparacaoRegimes.impacto.diferencaCapitalGiro.push(
+                    impactoAno.diferencaCapitalGiro || 0
+                );
+                comparacaoRegimes.impacto.percentualImpacto.push(
+                    impactoAno.percentualImpacto || 0
+                );
+                comparacaoRegimes.impacto.necessidadeAdicional.push(
+                    impactoAno.necessidadeAdicionalCapitalGiro || 0
+                );
 
                 // Atualizar faturamento para o próximo ano com a taxa de crescimento
                 dadosAno.faturamento = dadosAno.faturamento * (1 + taxaCrescimento);
@@ -789,6 +1017,7 @@ window.IVADualSystem = (function() {
                 },
                 resultadosAnuais,  // Resultados para cada ano individualmente
                 impactoAcumulado,
+                comparacaoRegimes, // Nova estrutura para comparações e gráficos
                 memoriaCritica
             };
 
@@ -819,6 +1048,18 @@ window.IVADualSystem = (function() {
                     totalNecessidadeCapitalGiro: dados.faturamento * dados.aliquota * 5, // Estimativa grosseira
                     custoFinanceiroTotal: dados.faturamento * dados.aliquota * 5 * 0.021 * 12, // Estimativa grosseira
                     impactoMedioMargem: 0.5 // Valor aproximado
+                },
+                resultadosAnuais: {}, // Adicionar objeto vazio para evitar erros de acesso
+                comparacaoRegimes: {  // Estrutura mínima para evitar erros no chartManager
+                    anos: [anoInicial, anoFinal],
+                    atual: { capitalGiro: [0, 0], impostos: [0, 0] },
+                    splitPayment: { capitalGiro: [0, 0], impostos: [0, 0] },
+                    ivaSemSplit: { capitalGiro: [0, 0], impostos: [0, 0] },
+                    impacto: { 
+                        diferencaCapitalGiro: [0, 0], 
+                        percentualImpacto: [0, 0], 
+                        necessidadeAdicional: [0, 0] 
+                    }
                 }
             };
         }
@@ -939,6 +1180,78 @@ window.IVADualSystem = (function() {
         // Identificar combinação ótima
         const combinacaoOtima = identificarCombinacaoOtima(dados, estrategias, resultadosEstrategias, impactoBase);
 
+        // Gerar dados para comparação entre regimes
+        const regimesComparacao = {
+            semMitigacao: {
+                capitalGiro: impactoBase.resultadoSplitPayment?.capitalGiroDisponivel || 0,
+                diferencaCapitalGiro: impactoBase.diferencaCapitalGiro || 0,
+                percentualImpacto: impactoBase.percentualImpacto || 0,
+                necessidadeAdicional: impactoBase.necessidadeAdicionalCapitalGiro || 0
+            },
+            comMitigacao: {
+                capitalGiro: (impactoBase.resultadoSplitPayment?.capitalGiroDisponivel || 0) + 
+                             (efeitividadeCombinada.mitigacaoTotal || 0),
+                diferencaCapitalGiro: (impactoBase.diferencaCapitalGiro || 0) + 
+                                     (efeitividadeCombinada.mitigacaoTotal || 0),
+                percentualImpacto: impactoBase.percentualImpacto ? 
+                                  (impactoBase.percentualImpacto * (1 - efeitividadeCombinada.efetividadePercentual/100)) : 0,
+                necessidadeAdicional: impactoBase.necessidadeAdicionalCapitalGiro ? 
+                                     (impactoBase.necessidadeAdicionalCapitalGiro * (1 - efeitividadeCombinada.efetividadePercentual/100)) : 0
+            },
+            efeitividadeEstrategias: Object.fromEntries(
+                Object.entries(resultadosEstrategias)
+                    .filter(([_, resultado]) => resultado !== null)
+                    .map(([nome, resultado]) => [
+                        nome, 
+                        {
+                            efetividadePercentual: resultado.efetividadePercentual || 0,
+                            mitigacaoValor: resultado.mitigacaoTotal || 0,
+                            custo: window.CalculationCore.getFuncaoCusto(nome, resultado) || 0,
+                            custoBeneficio: resultado.custoBeneficio || 0
+                        }
+                    ])
+            )
+        };
+
+        // Gerar dados para gráficos
+        const dadosGraficos = {
+            // Gráfico de efetividade de estratégias
+            efetividade: {
+                estrategias: Object.entries(resultadosEstrategias)
+                    .filter(([_, resultado]) => resultado !== null)
+                    .map(([nome, resultado]) => ({
+                        nome: window.CalculationCore.traduzirNomeEstrategia(nome),
+                        efetividade: resultado.efetividadePercentual || 0
+                    })),
+                combinada: efeitividadeCombinada.efetividadePercentual || 0
+            },
+
+            // Gráfico de custo-benefício
+            custoBeneficio: {
+                estrategias: Object.entries(resultadosEstrategias)
+                    .filter(([_, resultado]) => resultado !== null)
+                    .map(([nome, resultado]) => ({
+                        nome: window.CalculationCore.traduzirNomeEstrategia(nome),
+                        custo: window.CalculationCore.getFuncaoCusto(nome, resultado) || 0,
+                        beneficio: resultado.mitigacaoTotal || 0,
+                        relacao: resultado.custoBeneficio || 0
+                    }))
+            },
+
+            // Gráfico de comparação antes/depois da mitigação
+            comparacaoImpacto: {
+                labels: ['Sem Mitigação', 'Com Mitigação'],
+                diferencaCapitalGiro: [
+                    Math.abs(impactoBase.diferencaCapitalGiro || 0),
+                    Math.abs((impactoBase.diferencaCapitalGiro || 0) * (1 - efeitividadeCombinada.efetividadePercentual/100))
+                ],
+                necessidadeAdicional: [
+                    impactoBase.necessidadeAdicionalCapitalGiro || 0,
+                    (impactoBase.necessidadeAdicionalCapitalGiro || 0) * (1 - efeitividadeCombinada.efetividadePercentual/100)
+                ]
+            }
+        };
+
         // Resultado completo
         const resultado = {
             impactoBase,
@@ -947,6 +1260,8 @@ window.IVADualSystem = (function() {
             estrategiasOrdenadas,
             estrategiaMaisEfetiva,
             combinacaoOtima,
+            regimesComparacao,    // Nova estrutura para comparações
+            dadosGraficos,        // Nova estrutura para gráficos
             memoriaCritica: window.CalculationCore.gerarMemoriaCritica(dados, null)
         };
 
@@ -1675,68 +1990,73 @@ window.IVADualSystem = (function() {
      * @param {Object} [options] - Opções adicionais para o cálculo
      * @returns {Object} Resultado do cálculo na transição
      */
-    // Atualizar a função calcularTransicaoIVADual para considerar o ano de 2026
     function calcularTransicaoIVADual(baseValue, year, currentTaxes, options = {}) {
+        // Criar cópia dos impostos atuais para não modificar o original
         const result = { ...currentTaxes };
+        const dados = options.dados || {};
 
-        // Determinar percentual de implementação com base no ano
-        let percentualImplementacao = obterPercentualImplementacao(year, options.parametrosSetoriais);
+        // Obter percentuais específicos para CBS e IBS
+        const percentualCBS = window.CurrentTaxSystem.obterPercentualImplementacao(
+            year, 'cbs', options.parametrosSetoriais
+        );
 
-        // Mesmo em 2026, permitir simulação com as alíquotas iniciais de teste
-        // Percentual CBS (aplicável a partir de 2026 com 0,9%)
-        let percentualCBS = 0;
-        if (year >= 2026) {
-            if (year >= periodosTransicao.cbs.end) {
-                // CBS totalmente implementado
-                percentualCBS = percentualImplementacao;
-            } else {
-                // Durante a transição do CBS
-                percentualCBS = percentualImplementacao * 0.9/26.5; // Alíquota inicial de 0,9% ajustada para o total
-            }
-        }
+        const percentualIBS = window.CurrentTaxSystem.obterPercentualImplementacao(
+            year, 'ibs', options.parametrosSetoriais
+        );
 
-        // Percentual IBS (aplicável a partir de 2026 com 0,1%)
-        let percentualIBS = 0;
-        if (year >= 2026) {
-            if (year >= periodosTransicao.ibs.end) {
-                // IBS totalmente implementado
-                percentualIBS = percentualImplementacao;
-            } else {
-                // Durante a transição do IBS
-                percentualIBS = percentualImplementacao * 0.1/26.5; // Alíquota inicial de 0,1% ajustada para o total
-            }
-        }
+        // Log para depuração
+        console.log(`Calculando impostos para ano ${year}: CBS=${percentualCBS*100}%, IBS=${percentualIBS*100}%`);
 
-        // Calcular os impostos nos dois sistemas, ponderados pela transição
+        // Extrair alíquotas específicas do setor
+        const aliquotaCBS = dados.aliquotaCBS || options.parametrosSetoriais?.aliquotaCBS || aliquotasIVADual.cbs;
+        const aliquotaIBS = dados.aliquotaIBS || options.parametrosSetoriais?.aliquotaIBS || aliquotasIVADual.ibs;
+        const categoriaIVA = dados.categoriaIVA || options.parametrosSetoriais?.categoriaIva || 'standard';
+        const reducaoEspecial = dados.reducaoEspecial || options.parametrosSetoriais?.reducaoEspecial || 0;
+
+        // Aplicar os cálculos de CBS se percentual maior que zero
         if (percentualCBS > 0) {
-            // Valor base para CBS (equivalente a PIS+COFINS)
-            const baseValueCBS = baseValue;
-            const cbsTax = calcularCBS(baseValueCBS) * percentualCBS;
+            // Calcular CBS usando alíquota e categoria específicas
+            const cbsTax = calcularCBS(baseValue, aliquotaCBS, 0, categoriaIVA) * percentualCBS;
 
             // Reduzir PIS/COFINS proporcionalmente
             if (result.pis) result.pis *= (1 - percentualCBS);
             if (result.cofins) result.cofins *= (1 - percentualCBS);
 
-            // Adicionar CBS
             result.cbs = cbsTax;
+        } else {
+            result.cbs = 0; // Garantir que o valor seja explicitamente definido
         }
 
+        // Aplicar os cálculos de IBS se percentual maior que zero
         if (percentualIBS > 0) {
-            // Valor base para IBS (equivalente a ICMS+ISS)
-            const baseValueIBS = baseValue;
-            const ibsTax = calcularIBS(baseValueIBS) * percentualIBS;
+            // Calcular IBS usando alíquota e categoria específicas  
+            const ibsTax = calcularIBS(
+                baseValue, 
+                aliquotaIBS, 
+                0, 
+                categoriaIVA, 
+                { reducaoEspecial: reducaoEspecial }
+            ) * percentualIBS;
 
             // Reduzir ICMS/ISS proporcionalmente
             if (result.icms) result.icms *= (1 - percentualIBS);
             if (result.iss) result.iss *= (1 - percentualIBS);
 
-            // Adicionar IBS
             result.ibs = ibsTax;
+        } else {
+            result.ibs = 0; // Garantir que o valor seja explicitamente definido
         }
 
-        // Recalcular o total
-        result.total = Object.values(result).reduce((sum, value) => 
-            typeof value === 'number' ? sum + value : sum, 0);
+        // Recalcular o total considerando todos os impostos
+        result.total = 0;
+        Object.entries(result).forEach(([chave, valor]) => {
+            if (chave !== 'total' && typeof valor === 'number') {
+                result.total += valor;
+            }
+        });
+
+        // Log adicional para depuração
+        console.log(`Impostos calculados para ano ${year}:`, result);
 
         return result;
     }

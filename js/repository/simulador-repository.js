@@ -57,26 +57,23 @@ window.SimuladorRepository = {
     _carregar: function() {
         try {
             const dadosSalvos = localStorage.getItem(this.STORAGE_KEY);
-            if (dadosSalvos) {
-                // Mesclar dados salvos com a estrutura atual para preservar campos novos
-                const dadosCarregados = JSON.parse(dadosSalvos);
-                
-                // Mesclar cada seção separadamente para não perder novos campos da estrutura
-                Object.keys(dadosCarregados).forEach(secao => {
-                    if (this._dadosSimulador[secao]) {
-                        this._dadosSimulador[secao] = {
-                            ...this._dadosSimulador[secao],
-                            ...dadosCarregados[secao]
-                        };
-                    }
-                });
-                
-                console.log('Dados carregados com sucesso do localStorage');
-                return true;
+            let dadosCarregados = dadosSalvos ? JSON.parse(dadosSalvos) : {};
+
+            // Forçar reset do faturamento independentemente da origem dos dados
+            if (dadosCarregados.empresa) {
+                dadosCarregados.empresa.faturamento = 0; // [2][3]
             }
-            return false;
+
+            // Mesclar dados preservando a estrutura padrão
+            this.dadosSimulador = {
+                ...this._dadosSimulador,
+                ...dadosCarregados
+            };
+
+            console.log('Dados carregados com reset de faturamento');
+            return true;
         } catch (error) {
-            console.error('Erro ao carregar dados do localStorage:', error);
+            console.error('Erro ao carregar dados:', error);
             return false;
         }
     },

@@ -172,9 +172,83 @@ const EstrategiasMitigacaoController = {
     exibirResultadosEstrategias: function(resultados) {
         // Implementar exibição dos resultados na interface
         // Implementação...
-    }
+    },
     
     // Outros métodos necessários...
+    
+    /**
+     * Inicializa eventos específicos para os campos de estratégias
+     */
+    inicializarEventosEstrategias() {
+        console.log('Inicializando eventos específicos para estratégias');
+
+        try {
+            // Mapear os seletores de ativação das estratégias
+            const seletoresAtivacao = [
+                'ap-ativar', 'rp-ativar', 'ar-ativar', 
+                'cg-ativar', 'mp-ativar', 'mp-pag-ativar'
+            ];
+
+            // Adicionar evento de mudança para cada seletor
+            seletoresAtivacao.forEach(id => {
+                const seletor = document.getElementById(id);
+                if (seletor) {
+                    seletor.addEventListener('change', function() {
+                        console.log(`Estratégia ${id} alterada: ${this.value}`);
+
+                        // Atualizar configurações no formulário
+                        if (window.SimuladorFluxoCaixa && window.SimuladorFluxoCaixa.extrairConfiguracoesEstrategias) {
+                            const dadosAninhados = window.DataManager.obterDadosDoFormulario();
+                            const estrategias = window.SimuladorFluxoCaixa.extrairConfiguracoesEstrategias(dadosAninhados);
+
+                            // Salvar no repositório
+                            if (window.SimuladorFluxoCaixa.salvarEstrategiasNoRepositorio) {
+                                window.SimuladorFluxoCaixa.salvarEstrategiasNoRepositorio(estrategias);
+                            }
+                        }
+                    });
+                }
+            });
+
+            // Adicionar eventos para campos numéricos (percentuais, valores)
+            const camposNumericos = [
+                'ap-percentual', 'ap-elasticidade', 'rp-aumento-prazo', 'rp-percentual',
+                'ar-percentual', 'ar-taxa', 'ar-prazo', 'cg-valor', 'cg-taxa',
+                'cg-prazo', 'cg-carencia', 'mp-percentual', 'mp-impacto-receita',
+                'mp-impacto-margem', 'mp-pag-vista-novo', 'mp-pag-30-novo',
+                'mp-pag-60-novo', 'mp-pag-90-novo', 'mp-pag-taxa-incentivo'
+            ];
+
+            // Debounce para evitar muitas atualizações
+            let debounceTimeout;
+
+            // Adicionar eventos para os campos numéricos
+            camposNumericos.forEach(id => {
+                const campo = document.getElementById(id);
+                if (campo) {
+                    campo.addEventListener('change', function() {
+                        clearTimeout(debounceTimeout);
+                        debounceTimeout = setTimeout(() => {
+                            // Extrair e salvar automaticamente
+                            if (window.SimuladorFluxoCaixa && window.SimuladorFluxoCaixa.extrairConfiguracoesEstrategias) {
+                                const dadosAninhados = window.DataManager.obterDadosDoFormulario();
+                                const estrategias = window.SimuladorFluxoCaixa.extrairConfiguracoesEstrategias(dadosAninhados);
+
+                                // Salvar no repositório
+                                if (window.SimuladorFluxoCaixa.salvarEstrategiasNoRepositorio) {
+                                    window.SimuladorFluxoCaixa.salvarEstrategiasNoRepositorio(estrategias);
+                                }
+                            }
+                        }, 300);
+                    });
+                }
+            });
+
+            console.log('Eventos de estratégias inicializados com sucesso');
+        } catch (erro) {
+            console.error('Erro ao inicializar eventos de estratégias:', erro);
+        }
+    }
 };
 
 // Inicialização automática quando o DOM estiver carregado

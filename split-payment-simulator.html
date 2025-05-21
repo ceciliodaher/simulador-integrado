@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="css/forms.css">
     <link rel="stylesheet" href="css/charts.css">
     <link rel="stylesheet" href="css/modals.css">
+	<link rel="stylesheet" href="css/importacao.css">
 </head>
 <body>
     <div class="container">
@@ -32,6 +33,7 @@
                 <button class="tab-button" data-tab="estrategias">Estratégias de Mitigação</button>
                 <button class="tab-button" data-tab="memoria">Memória de Cálculo</button>
                 <button class="tab-button" data-tab="ajuda">Ajuda e Documentação</button>
+				<button class="tab-button" data-tab="importacao-sped">Importação SPED</button>
             </div>
 		           
             <!-- Aba de Simulação -->
@@ -481,6 +483,14 @@
 											<span class="label">Diferença:</span>
 											<span id="tributo-diferenca" class="value"></span>
 										</div>
+										<div class="result-item">
+											<span class="label">Sistema IVA sem Split:</span>
+											<span id="tributo-iva-sem-split" class="value"></span>
+										</div>
+										<div class="result-item">
+											<span class="label">Diferença IVA sem Split:</span>
+											<span id="tributo-diferenca-iva-sem-split" class="value"></span>
+										</div>
 									</div>
 								</div>
 															
@@ -492,12 +502,20 @@
 											<span id="capital-giro-atual" class="value"></span>
 										</div>
 										<div class="result-item">
+											<span class="label">Regime IVA sem Split:</span>
+											<span id="capital-giro-iva-sem-split" class="value"></span>
+										</div>
+										<div class="result-item">
 											<span class="label">Regime Split Payment:</span>
 											<span id="capital-giro-split" class="value"></span>
 										</div>
 										<div class="result-item">
 											<span class="label">Impacto Total:</span>
 											<span id="capital-giro-impacto" class="value impact"></span>
+										</div>
+										<div class="result-item">
+											<span class="label">Impacto IVA sem Split:</span>
+											<span id="capital-giro-impacto-iva-sem-split" class="value"></span>
 										</div>
 										<div class="result-item">
 											<span class="label">Necessidade Adicional:</span>
@@ -1200,15 +1218,77 @@
                 </div>
                 
                 <div class="group-box">
-                    <h3>Resultados Estimados com Estratégias</h3>
-                    <div id="resultados-estrategias">
-                        <p class="text-muted">Selecione as estratégias de mitigação e simule para ver os resultados estimados.</p>
-                    </div>
-                </div>
+					<h3>Resultados Estimados com Estratégias</h3>
+					<div class="year-selector">
+						<label for="ano-visualizacao-estrategias">Ano de Visualização:</label>
+						<select id="ano-visualizacao-estrategias" onchange="atualizarVisualizacaoEstrategias()">
+								<option value="2026">2026 (10%)</option>
+								<option value="2027">2027 (25%)</option>
+								<option value="2028">2028 (40%)</option>
+								<option value="2029">2029 (55%)</option>
+								<option value="2030">2030 (70%)</option>
+								<option value="2031">2031 (85%)</option>
+								<option value="2032">2032 (95%)</option>
+								<option value="2033">2033 (100%)</option>
+							<!-- Será preenchido dinamicamente pelo JavaScript -->
+						</select>
+					</div>
+					<div id="resultados-estrategias">
+						<p class="text-muted">Selecione as estratégias de mitigação e simule para ver os resultados estimados.</p>
+					<!-- Dentro da div com id "resultados-estrategias", adicionar: -->
+					<div class="systems-comparison">
+						<h5>Comparação entre Sistemas Tributários</h5>
+						<table class="comparison-table">
+							<thead>
+								<tr>
+									<th>Sistema</th>
+									<th>Capital de Giro</th>
+									<th>Impostos</th>
+									<th>Efetividade</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>Regime Atual</td>
+									<td id="estrategia-atual-capital">R$ 0,00</td>
+									<td id="estrategia-atual-impostos">R$ 0,00</td>
+									<td id="estrategia-atual-efetividade">0.0%</td>
+								</tr>
+								<tr>
+									<td>IVA sem Split</td>
+									<td id="estrategia-iva-sem-split-capital">R$ 0,00</td>
+									<td id="estrategia-iva-sem-split-impostos">R$ 0,00</td>
+									<td id="estrategia-iva-sem-split-efetividade">0.0%</td>
+								</tr>
+								<tr>
+									<td>IVA com Split</td>
+									<td id="estrategia-iva-com-split-capital">R$ 0,00</td>
+									<td id="estrategia-iva-com-split-impostos">R$ 0,00</td>
+									<td id="estrategia-iva-com-split-efetividade">0.0%</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>					
+					</div>
+
+					<!-- Área para dados comparativos de estratégias -->
+					<div id="dados-comparativos-estrategias" style="display: none;">
+						<!-- Será preenchido dinamicamente pelo JavaScript -->
+					</div>
+				</div>
                 
-                <div class="chart-container">
-                    <canvas id="grafico-estrategias"></canvas>
-                </div>
+                <!-- Adicionar à seção de gráficos da aba Estratégias -->
+				<div class="charts-grid">
+					<div class="chart-container">
+						<canvas id="grafico-efetividade-estrategias"></canvas>
+					</div>
+					<div class="chart-container">
+						<canvas id="grafico-comparacao-estrategias"></canvas>
+					</div>
+					<div class="chart-container">
+						<canvas id="grafico-evolucao-estrategias"></canvas>
+					</div>
+				</div>
                 
                 <div class="button-group">
 					<button id="btn-simular-estrategias">Simular Estratégias</button>
@@ -1279,6 +1359,109 @@
                     <p>O split payment será implementado gradualmente, começando com testes piloto em 2026 e alcançando implementação total em 2033. Durante esse período, apenas uma parcela dos tributos será recolhida via split payment, aumentando progressivamente conforme o cronograma oficial.</p>
                 </div>
             </div>
+			
+			<!-- Aba de Importação SPED -->
+			<div id="importacao-sped" class="tab-content">
+				<div class="import-container">
+					<div class="import-header">
+						<h2>Importação de Arquivos SPED</h2>
+						<p class="text-muted">Importe arquivos SPED para alimentar o simulador com dados reais da empresa.</p>
+					</div>
+
+					<div class="file-selector">
+						<div class="group-box">
+							<h3>Seleção de Arquivos</h3>
+							<div class="form-row">
+								<div class="form-column">
+									<div class="form-group">
+										<label>SPED Fiscal (EFD ICMS/IPI)</label>
+										<input type="file" id="sped-fiscal" accept=".txt" class="file-input" />
+										<small class="text-muted">Arquivo de Escrituração Fiscal Digital ICMS/IPI</small>
+									</div>
+								</div>
+								<div class="form-column">
+									<div class="form-group">
+										<label>SPED Contribuições (EFD PIS/COFINS)</label>
+										<input type="file" id="sped-contribuicoes" accept=".txt" class="file-input" />
+										<small class="text-muted">Arquivo de Escrituração Fiscal Digital PIS/COFINS</small>
+									</div>
+								</div>
+							</div>
+							<div class="form-row">
+								<div class="form-column">
+									<div class="form-group">
+										<label>ECF (Escrituração Contábil Fiscal)</label>
+										<input type="file" id="sped-ecf" accept=".txt" class="file-input" />
+										<small class="text-muted">Arquivo de Escrituração Contábil Fiscal</small>
+									</div>
+								</div>
+								<div class="form-column">
+									<div class="form-group">
+										<label>ECD (Escrituração Contábil Digital)</label>
+										<input type="file" id="sped-ecd" accept=".txt" class="file-input" />
+										<small class="text-muted">Arquivo de Escrituração Contábil Digital</small>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="import-options">
+						<div class="group-box">
+							<h3>Opções de Importação</h3>
+							<div class="form-row">
+								<div class="form-column">
+									<div class="form-group checkbox-group">
+										<input type="checkbox" id="import-empresa" checked />
+										<label for="import-empresa">Dados da Empresa</label>
+									</div>
+									<div class="form-group checkbox-group">
+										<input type="checkbox" id="import-produtos" checked />
+										<label for="import-produtos">Produtos/Serviços</label>
+									</div>
+								</div>
+								<div class="form-column">
+									<div class="form-group checkbox-group">
+										<input type="checkbox" id="import-impostos" checked />
+										<label for="import-impostos">Impostos e Alíquotas</label>
+									</div>
+									<div class="form-group checkbox-group">
+										<input type="checkbox" id="import-ciclo" checked />
+										<label for="import-ciclo">Ciclo Financeiro</label>
+									</div>
+								</div>
+							</div>
+							<div class="form-row">
+								<div class="form-column">
+									<div class="form-group">
+										<label for="periodo-referencia">Período de Referência:</label>
+										<select id="periodo-referencia" class="form-control">
+											<option value="">Último período disponível</option>
+											<option value="ultimo-trimestre">Último trimestre</option>
+											<option value="ultimo-semestre">Último semestre</option>
+											<option value="ultimo-ano">Último ano fiscal</option>
+										</select>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="button-group" style="margin-top: 20px;">
+						<button id="btn-importar-sped" class="btn-primary">Importar Dados</button>
+						<button id="btn-cancelar-importacao" class="btn-secondary">Cancelar</button>
+					</div>
+
+					<div class="import-log-container">
+						<div class="group-box">
+							<h3>Log de Importação</h3>
+							<div id="import-log" class="log-area" style="height: 200px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
+								<p class="text-muted">Selecione os arquivos SPED e clique em "Importar Dados" para iniciar o processo.</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
         </div>
         
         <div class="footer">
@@ -1340,6 +1523,11 @@
 	<script src="js/ui/charts-manager.js"></script>
 	<script src="js/ui/modal-manager.js"></script>
 	<script src="js/ui/setores-ui.js"></script>
+	
+	<!-- Scripts específicos do importador SPED -->
+	<script src="js/importador/sped-parser.js"></script>
+	<script src="js/importador/sped-extractor.js"></script>
+	<script src="js/importador/importacao-controller.js"></script>
 
 	<!-- Módulos refatorados de cálculo -->
 	<script src="js/simulation/calculation-core.js"></script>

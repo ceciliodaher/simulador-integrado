@@ -60,6 +60,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // Inicializa o ImportacaoController
+    if (typeof ImportacaoController !== 'undefined' && ImportacaoController.inicializar) {
+        ImportacaoController.inicializar();
+    }
+    
     // Inicializar eventos principais
     inicializarEventosPrincipais();
     
@@ -482,72 +487,64 @@ function inicializarEventosPrincipais() {
  * Atualiza os resultados exibidos com base no ano selecionado
  */
 function atualizarResultadosPorAno() {
-    const anoSelecionado = parseInt(document.getElementById('ano-visualizacao').value);
+    // Obter o ano selecionado
+    const anoSelecionado = document.getElementById('ano-visualizacao').value;
     
-    // Se não há resultados calculados, retornar
-    if (!window.resultadosSimulacao || !window.resultadosSimulacao.projecaoTemporal) {
-        console.warn('Sem resultados de simulação para exibir');
+    // Verificar se há resultados carregados
+    if (!window.SimuladorFluxoCaixa || !window.resultadosSimulacao) {
+        console.warn('Não há resultados disponíveis para atualizar.');
         return;
     }
     
-    // Obter resultados para o ano selecionado
-    const resultadosAno = window.resultadosSimulacao.projecaoTemporal.resultadosAnuais[anoSelecionado];
-    
-    if (!resultadosAno) {
-        console.warn(`Não há resultados para o ano ${anoSelecionado}`);
+    const resultadosAnuais = window.resultadosSimulacao.projecaoTemporal?.resultadosAnuais;
+    if (!resultadosAnuais || !resultadosAnuais[anoSelecionado]) {
+        console.warn(`Não há resultados disponíveis para o ano ${anoSelecionado}.`);
         return;
     }
     
-    // Atualizar os campos de resultado na interface
-    const formatarMoeda = window.DataManager.formatarMoeda;
-    const formatarPercentual = window.DataManager.formatarPercentual;
+    const resultadoAno = resultadosAnuais[anoSelecionado];
     
-    // Atualizar elementos de comparação de sistemas tributários
-    document.getElementById('tributo-atual').textContent = formatarMoeda(resultadosAno.resultadoAtual?.valorImpostoTotal || 0);
-    document.getElementById('tributo-dual').textContent = formatarMoeda(resultadosAno.resultadoSplitPayment?.valorImpostoTotal || 0);
+    // Formatador de moeda para garantir consistência
+    const formatarMoeda = window.CalculationCore.formatarMoeda;
+    
+    // Atualizar valores na interface - Comparação de Sistemas Tributários
+    document.getElementById('tributo-atual').textContent = formatarMoeda(resultadoAno.resultadoAtual?.impostos?.total || 0);
+    document.getElementById('tributo-dual').textContent = formatarMoeda(resultadoAno.resultadoSplitPayment?.impostos?.total || 0);
     document.getElementById('tributo-diferenca').textContent = formatarMoeda(
-        (resultadosAno.resultadoSplitPayment?.valorImpostoTotal || 0) - 
-        (resultadosAno.resultadoAtual?.valorImpostoTotal || 0)
+        (resultadoAno.resultadoSplitPayment?.impostos?.total || 0) - 
+        (resultadoAno.resultadoAtual?.impostos?.total || 0)
     );
     
-    // Atualizar elementos de impacto no capital de giro
-    document.getElementById('capital-giro-atual').textContent = formatarMoeda(resultadosAno.resultadoAtual?.capitalGiroDisponivel || 0);
-    document.getElementById('capital-giro-split').textContent = formatarMoeda(resultadosAno.resultadoSplitPayment?.capitalGiroDisponivel || 0);
-    document.getElementById('capital-giro-impacto').textContent = formatarMoeda(resultadosAno.diferencaCapitalGiro || 0);
-    document.getElementById('capital-giro-necessidade').textContent = formatarMoeda(resultadosAno.necesidadeAdicionalCapitalGiro || 0);
-    
-    // Adicionar classe CSS baseada no valor
-    const impactoElement = document.getElementById('capital-giro-impacto');
-    if (impactoElement) {
-        if ((resultadosAno.diferencaCapitalGiro || 0) < 0) {
-            impactoElement.classList.add('valor-negativo');
-        } else {
-            impactoElement.classList.remove('valor-negativo');
-        }
-    }
-    
-    // Atualizar elementos de impacto na margem operacional
-    document.getElementById('margem-atual').textContent = formatarPercentual(resultadosAno.margemOperacionalOriginal * 100 || 0);
-    document.getElementById('margem-ajustada').textContent = formatarPercentual(resultadosAno.margemOperacionalAjustada * 100 || 0);
-    document.getElementById('margem-impacto').textContent = formatarPercentual(resultadosAno.impactoMargem || 0);
-    
-    // Atualizar elementos da análise de impacto detalhada
-    document.getElementById('percentual-impacto').textContent = formatarPercentual(resultadosAno.percentualImpacto || 0);
-    
-    // Usar o normalizador de valor para exibir os dias corretamente
-    const diasFaturamento = window.DataManager.normalizarValor(
-        resultadosAno.impactoDiasFaturamento || 0, 
-        'numero'
+    // Valores para IVA sem Split
+    document.getElementById('tributo-iva-sem-split').textContent = formatarMoeda(resultadoAno.resultadoIVASemSplit?.impostos?.total || 0);
+    document.getElementById('tributo-diferenca-iva-sem-split').textContent = formatarMoeda(
+        (resultadoAno.resultadoIVASemSplit?.impostos?.total || 0) - 
+        (resultadoAno.resultadoAtual?.impostos?.total || 0)
     );
-    document.getElementById('impacto-dias-faturamento').textContent = diasFaturamento.toFixed(1) + ' dias';
     
-    // Mostrar que estamos visualizando resultados de um ano específico
-    const tituloResultados = document.querySelector('#resultados h3');
-    if (tituloResultados) {
-        tituloResultados.textContent = `Resultados da Simulação (${anoSelecionado} - ${obterPercentualImplementacao(anoSelecionado)*100}%)`;
+    // Atualizar valores na interface - Impacto no Capital de Giro
+    document.getElementById('capital-giro-atual').textContent = formatarMoeda(resultadoAno.resultadoAtual?.capitalGiroDisponivel || 0);
+    document.getElementById('capital-giro-iva-sem-split').textContent = formatarMoeda(resultadoAno.resultadoIVASemSplit?.capitalGiroDisponivel || 0);
+    document.getElementById('capital-giro-split').textContent = formatarMoeda(resultadoAno.resultadoSplitPayment?.capitalGiroDisponivel || 0);
+    document.getElementById('capital-giro-impacto').textContent = formatarMoeda(resultadoAno.diferencaCapitalGiro || 0);
+    document.getElementById('capital-giro-impacto-iva-sem-split').textContent = formatarMoeda(resultadoAno.diferencaCapitalGiroIVASemSplit || 0);
+    document.getElementById('capital-giro-necessidade').textContent = formatarMoeda(resultadoAno.necessidadeAdicionalCapitalGiro || 0);
+    
+    // Atualizar valores na interface - Impacto na Margem Operacional
+    document.getElementById('margem-atual').textContent = ((resultadoAno.margemOperacionalOriginal || 0) * 100).toFixed(2) + '%';
+    document.getElementById('margem-ajustada').textContent = ((resultadoAno.margemOperacionalAjustada || 0) * 100).toFixed(2) + '%';
+    document.getElementById('margem-impacto').textContent = (resultadoAno.impactoMargem || 0).toFixed(2) + ' p.p.';
+    
+    // Atualizar valores na interface - Análise de Impacto Detalhada
+    document.getElementById('percentual-impacto').textContent = (resultadoAno.percentualImpacto || 0).toFixed(2) + '%';
+    document.getElementById('impacto-dias-faturamento').textContent = (resultadoAno.impactoDiasFaturamento || 0).toFixed(1) + ' dias';
+    
+    // Atualizar valores na interface - Projeção Temporal do Impacto
+    const projecao = window.resultadosSimulacao.projecaoTemporal?.impactoAcumulado;
+    if (projecao) {
+        document.getElementById('total-necessidade-giro').textContent = formatarMoeda(projecao.totalNecessidadeCapitalGiro || 0);
+        document.getElementById('custo-financeiro-total').textContent = formatarMoeda(projecao.custoFinanceiroTotal || 0);
     }
-    
-    console.log(`Resultados atualizados para o ano ${anoSelecionado}`);
 }
 
 function atualizarInterface(resultado) {
@@ -599,47 +596,72 @@ function atualizarInterface(resultado) {
             
         } else {
             // Atualizar elementos de comparação de sistemas tributários
-            document.getElementById('tributo-atual').textContent = formatarMoeda(resultado.impactoBase.resultadoAtual?.valorImpostoTotal || 0);
-            document.getElementById('tributo-dual').textContent = formatarMoeda(resultado.impactoBase.resultadoSplitPayment?.valorImpostoTotal || 0);
-            document.getElementById('tributo-diferenca').textContent = formatarMoeda(
-                (resultado.impactoBase.resultadoSplitPayment?.valorImpostoTotal || 0) - 
-                (resultado.impactoBase.resultadoAtual?.valorImpostoTotal || 0)
-            );
+            const valorImpostoAtual = resultado.impactoBase.resultadoAtual?.valorImpostoTotal || 0;
+            const valorImpostoSplit = resultado.impactoBase.resultadoSplitPayment?.valorImpostoTotal || 0;
+            const valorImpostoIVASemSplit = resultado.impactoBase.resultadoIVASemSplit?.valorImpostoTotal || 0;
+            
+            document.getElementById('tributo-atual').textContent = formatarMoeda(valorImpostoAtual);
+            document.getElementById('tributo-dual').textContent = formatarMoeda(valorImpostoSplit);
+            document.getElementById('tributo-diferenca').textContent = formatarMoeda(valorImpostoSplit - valorImpostoAtual);
+            document.getElementById('tributo-iva-sem-split').textContent = formatarMoeda(valorImpostoIVASemSplit);
+            document.getElementById('tributo-diferenca-iva-sem-split').textContent = formatarMoeda(valorImpostoIVASemSplit - valorImpostoAtual);
             
             // Atualizar elementos de impacto no capital de giro
-            document.getElementById('capital-giro-atual').textContent = formatarMoeda(resultado.impactoBase.resultadoAtual?.capitalGiroDisponivel || 0);
-            document.getElementById('capital-giro-split').textContent = formatarMoeda(resultado.impactoBase.resultadoSplitPayment?.capitalGiroDisponivel || 0);
-            document.getElementById('capital-giro-impacto').textContent = formatarMoeda(resultado.impactoBase.diferencaCapitalGiro || 0);
-            document.getElementById('capital-giro-necessidade').textContent = formatarMoeda(resultado.impactoBase.necesidadeAdicionalCapitalGiro || 0);
+            const capitalGiroAtual = resultado.impactoBase.resultadoAtual?.capitalGiroDisponivel || 0;
+            const capitalGiroSplit = resultado.impactoBase.resultadoSplitPayment?.capitalGiroDisponivel || 0;
+            const capitalGiroIVASemSplit = resultado.impactoBase.resultadoIVASemSplit?.capitalGiroDisponivel || 0;
+            const diferencaCapitalGiro = resultado.impactoBase.diferencaCapitalGiro || 0;
+            const diferencaCapitalGiroIVASemSplit = resultado.impactoBase.diferencaCapitalGiroIVASemSplit || 0;
+            const necessidadeAdicionalCapitalGiro = resultado.impactoBase.necessidadeAdicionalCapitalGiro || 0;
+            
+            document.getElementById('capital-giro-atual').textContent = formatarMoeda(capitalGiroAtual);
+            document.getElementById('capital-giro-iva-sem-split').textContent = formatarMoeda(capitalGiroIVASemSplit);
+            document.getElementById('capital-giro-split').textContent = formatarMoeda(capitalGiroSplit);
+            document.getElementById('capital-giro-impacto').textContent = formatarMoeda(diferencaCapitalGiro);
+            document.getElementById('capital-giro-impacto-iva-sem-split').textContent = formatarMoeda(diferencaCapitalGiroIVASemSplit);
+            document.getElementById('capital-giro-necessidade').textContent = formatarMoeda(necessidadeAdicionalCapitalGiro);
             
             // Adicionar classe CSS baseada no valor
             const impactoElement = document.getElementById('capital-giro-impacto');
             if (impactoElement) {
-                if ((resultado.impactoBase.diferencaCapitalGiro || 0) < 0) {
+                if (diferencaCapitalGiro < 0) {
                     impactoElement.classList.add('valor-negativo');
                 } else {
                     impactoElement.classList.remove('valor-negativo');
                 }
             }
             
+            const impactoIVASemSplitElement = document.getElementById('capital-giro-impacto-iva-sem-split');
+            if (impactoIVASemSplitElement) {
+                if (diferencaCapitalGiroIVASemSplit < 0) {
+                    impactoIVASemSplitElement.classList.add('valor-negativo');
+                } else {
+                    impactoIVASemSplitElement.classList.remove('valor-negativo');
+                }
+            }
+            
             // Atualizar elementos de impacto na margem operacional
-            document.getElementById('margem-atual').textContent = formatarPercentual(resultado.impactoBase.margemOperacionalOriginal * 100 || 0);
-            document.getElementById('margem-ajustada').textContent = formatarPercentual(resultado.impactoBase.margemOperacionalAjustada * 100 || 0);
-            document.getElementById('margem-impacto').textContent = formatarPercentual(resultado.impactoBase.impactoMargem || 0);
+            const margemOriginal = resultado.impactoBase.margemOperacionalOriginal * 100 || 0;
+            const margemAjustada = resultado.impactoBase.margemOperacionalAjustada * 100 || 0;
+            const impactoMargem = resultado.impactoBase.impactoMargem || 0;
+            
+            document.getElementById('margem-atual').textContent = formatarPercentual(margemOriginal);
+            document.getElementById('margem-ajustada').textContent = formatarPercentual(margemAjustada);
+            document.getElementById('margem-impacto').textContent = formatarPercentual(impactoMargem);
             
             // Atualizar elementos da análise de impacto detalhada
-            document.getElementById('percentual-impacto').textContent = formatarPercentual(resultado.impactoBase.percentualImpacto || 0);
+            const percentualImpacto = resultado.impactoBase.percentualImpacto || 0;
+            const impactoDiasFaturamento = resultado.impactoBase.impactoDiasFaturamento || 0;
             
-            // Usar o normalizador de valor para exibir os dias corretamente
-            const diasFaturamento = window.DataManager.normalizarValor(
-                resultado.impactoBase.impactoDiasFaturamento || 0, 
-                'numero'
-            );
-            document.getElementById('impacto-dias-faturamento').textContent = diasFaturamento.toFixed(1) + ' dias';
+            document.getElementById('percentual-impacto').textContent = formatarPercentual(percentualImpacto);
+            document.getElementById('impacto-dias-faturamento').textContent = impactoDiasFaturamento.toFixed(1) + ' dias';
             
             // Atualizar elementos da projeção temporal do impacto
-            document.getElementById('total-necessidade-giro').textContent = formatarMoeda(resultado.projecaoTemporal?.impactoAcumulado?.totalNecessidadeCapitalGiro || 0);
-            document.getElementById('custo-financeiro-total').textContent = formatarMoeda(resultado.projecaoTemporal?.impactoAcumulado?.custoFinanceiroTotal || 0);
+            const totalNecessidadeGiro = resultado.projecaoTemporal?.impactoAcumulado?.totalNecessidadeCapitalGiro || 0;
+            const custoFinanceiroTotal = resultado.projecaoTemporal?.impactoAcumulado?.custoFinanceiroTotal || 0;
+            
+            document.getElementById('total-necessidade-giro').textContent = formatarMoeda(totalNecessidadeGiro);
+            document.getElementById('custo-financeiro-total').textContent = formatarMoeda(custoFinanceiroTotal);
         }
         
         // Se split-payment não for considerado, ajustar labels
@@ -652,7 +674,7 @@ function atualizarInterface(resultado) {
             const labelSegundoSistema = document.querySelector('.result-card:first-child .result-grid .result-item:nth-child(2) .label');
             if (labelSegundoSistema) labelSegundoSistema.textContent = 'Sistema IVA Sem Split:';
             
-            const labelCapitalGiroSplit = document.querySelector('.result-card:nth-child(2) .result-grid .result-item:nth-child(2) .label');
+            const labelCapitalGiroSplit = document.querySelector('.result-card:nth-child(2) .result-grid .result-item:nth-child(3) .label');
             if (labelCapitalGiroSplit) labelCapitalGiroSplit.textContent = 'Sistema IVA:';
         }
         
@@ -684,6 +706,138 @@ window.atualizarInterface = atualizarInterface;
 
 // Exportar a função para o escopo global
 window.atualizarInterface = atualizarInterface;
+
+/**
+ * Atualiza os resultados de estratégias conforme o ano selecionado
+ */
+function atualizarVisualizacaoEstrategias() {
+    console.log('MAIN.JS: Iniciando atualização de visualização de estratégias...');
+
+    // 1. Verificar se o SimuladorFluxoCaixa está disponível
+    if (!window.SimuladorFluxoCaixa) {
+        console.error('MAIN.JS: SimuladorFluxoCaixa não encontrado.');
+        const divResultados = document.getElementById('resultados-estrategias');
+        if (divResultados) {
+            divResultados.innerHTML = `<div class="alert alert-danger"><strong>Erro Crítico:</strong> Componente de simulação não carregado.</div>`;
+        }
+        return;
+    }
+
+    try {
+        const divResultados = document.getElementById('resultados-estrategias');
+        if (!divResultados) {
+            console.error('MAIN.JS: Elemento #resultados-estrategias não encontrado no DOM.');
+            return;
+        }
+
+        // 2. Verificar se há resultados da SIMULAÇÃO PRINCIPAL disponíveis
+        if (!window.resultadosSimulacao || !window.resultadosSimulacao.impactoBase) {
+            console.warn('MAIN.JS: Resultados da simulação principal não encontrados. Solicitando execução.');
+            divResultados.innerHTML = `
+                <div class="alert alert-warning">
+                    <strong>Atenção:</strong> É necessário executar uma simulação na aba "Simulação" 
+                    antes de visualizar ou aplicar estratégias de mitigação.
+                </div>
+                <p class="text-muted">Acesse a aba "Simulação", configure os parâmetros e clique em 
+                "Simular Impacto no Fluxo de Caixa".</p>
+            `;
+            // Limpar ou inicializar gráficos em estado vazio
+            if (typeof window.ChartManager !== 'undefined' && typeof window.ChartManager.renderizarGraficoEstrategias === 'function') {
+                window.ChartManager.renderizarGraficoEstrategias(null, null);
+            }
+            return;
+        }
+
+        // 3. Verificar se existem resultados de estratégias usando a classe específica
+        const hasActualResults = divResultados.querySelector('.estrategias-resumo');
+        
+        // 4. Se existem resultados, apenas atualizar os gráficos (não sobrescrever HTML)
+        if (hasActualResults) {
+            console.log('MAIN.JS: Resultados detalhados de estratégias encontrados. Atualizando visualização...');
+            
+            // Atualizar visualização para o ano selecionado (se aplicável)
+            const seletorAno = document.getElementById('ano-visualizacao-estrategias');
+            if (seletorAno) {
+                const anoSelecionado = parseInt(seletorAno.value);
+                console.log(`MAIN.JS: Ano de visualização selecionado: ${anoSelecionado}`);
+                
+                // Implementar lógica específica para atualização por ano, se necessário
+                // ...
+            }
+            
+            // Renderizar novamente os gráficos com os resultados existentes
+            if (window.lastStrategyResults && window.resultadosSimulacao && window.resultadosSimulacao.impactoBase &&
+                typeof window.ChartManager !== 'undefined' && 
+                typeof window.ChartManager.renderizarGraficoEstrategias === 'function') {
+                
+                console.log('MAIN.JS: Re-renderizando gráficos de estratégias com dados existentes.');
+                try {
+                    window.ChartManager.renderizarGraficoEstrategias(
+                        window.lastStrategyResults, 
+                        window.resultadosSimulacao.impactoBase
+                    );
+                } catch (erroChart) {
+                    console.warn('MAIN.JS: Erro ao re-renderizar gráficos de estratégias:', erroChart);
+                }
+            } else {
+                console.warn('MAIN.JS: Dados insuficientes para re-renderizar gráficos.');
+            }
+            
+            return;
+        }
+
+        // 5. Se não há resultados, exibir mensagem informativa
+        console.log('MAIN.JS: Nenhum resultado detalhado de estratégia encontrado. Exibindo mensagem informativa.');
+        
+        // Verificar se há estratégias ativas configuradas
+        const dadosAninhados = window.DataManager.obterDadosDoFormulario();
+        let temEstrategiasAtivas = false;
+        
+        if (dadosAninhados && dadosAninhados.estrategias) {
+            temEstrategiasAtivas = Object.values(dadosAninhados.estrategias).some(
+                estrategia => estrategia && estrategia.ativar === true
+            );
+        }
+        
+        // Exibir mensagem adequada com base no estado das estratégias
+        if (temEstrategiasAtivas) {
+            divResultados.innerHTML = `
+                <div class="alert alert-info">
+                    <strong>Informação:</strong> Estratégias de mitigação configuradas. 
+                    Clique no botão "Simular Estratégias" para visualizar os resultados.
+                </div>
+            `;
+        } else {
+            divResultados.innerHTML = `
+                <div class="alert alert-info">
+                    <strong>Informação:</strong> Selecione pelo menos uma estratégia de mitigação ativando-a 
+                    com o seletor "Ativar Estratégia" em cada seção e configure seus parâmetros.
+                </div>
+                <p class="text-muted">Após ativar estratégias e configurar seus parâmetros, clique no botão "Simular Estratégias" para visualizar os resultados.</p>
+            `;
+        }
+        
+        // Inicializar gráficos em estado vazio ou com dados básicos
+        if (typeof window.ChartManager !== 'undefined' && 
+            typeof window.ChartManager.renderizarGraficoEstrategias === 'function') {
+            window.ChartManager.renderizarGraficoEstrategias(null, window.resultadosSimulacao.impactoBase);
+        }
+
+        console.log('MAIN.JS: Visualização de estratégias atualizada com sucesso.');
+
+    } catch (erro) {
+        console.error('MAIN.JS: Erro fatal ao tentar atualizar visualização de estratégias:', erro);
+        const divResultados = document.getElementById('resultados-estrategias');
+        if (divResultados) {
+            divResultados.innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>Erro Inesperado:</strong> Ocorreu um problema ao tentar preparar a visualização das estratégias.
+                    <br>Detalhes: ${erro.message}
+                </div>
+            `;
+        }
+    }
+}
 
 function inicializarRepository() {
     // Verificar se o repository já existe
