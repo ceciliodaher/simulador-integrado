@@ -394,14 +394,14 @@ const SpedExtractor = (function() {
     }
 
     /**
-     * Extrai parâmetros fiscais
+     * Extrai parâmetros fiscais com estrutura otimizada para o painel detalhado
      * @param {Object} dadosSped - Dados SPED
-     * @returns {Object} Parâmetros fiscais formatados
+     * @returns {Object} Parâmetros fiscais formatados com composição detalhada
      */
     function extrairParametrosFiscais(dadosSped) {
         const impostos = dadosSped.impostos || {};
         const creditos = dadosSped.creditos || {};
-        const debitos = dadosSped.debitos || {}; // Adicionar referência aos débitos
+        const debitos = dadosSped.debitos || {};
         const regimeTributario = determinarRegimeTributario(dadosSped);
         const ajustes = dadosSped.ajustes || {};
         const itensAnaliticos = dadosSped.itensAnaliticos || [];
@@ -418,38 +418,129 @@ const SpedExtractor = (function() {
         // Determinar tipo de operação (B2B vs B2C)
         const tipoOperacao = determinarTipoOperacao(dadosSped);
 
-        // Estrutura básica
-        let parametros = {
+        // Calcular faturamento mensal para base de cálculo das alíquotas efetivas
+        const faturamentoMensal = calcularFaturamentoMensal(dadosSped);
+
+        // ESTRUTURA PRINCIPAL: Organizada para alimentar o painel detalhado
+        const parametros = {
+            // Dados básicos do regime
             tipoOperacao: tipoOperacao,
             regimePisCofins: dadosPisCofins.regime,
+            regime: regimeTributario,
+
+            // NOVA SEÇÃO: Composição tributária detalhada (prioridade para painel)
+            composicaoTributaria: {
+                // Débitos mensais por imposto
+                debitos: {
+                    pis: calcularDebitosPIS(dadosSped),
+                    cofins: calcularDebitosCOFINS(dadosSped),
+                    icms: calcularDebitosICMS(dadosSped),
+                    ipi: calcularDebitosIPI(dadosSped),
+                    iss: calcularDebitosISS(dadosSped)
+                },
+
+                // Créditos mensais por imposto
+                creditos: {
+                    pis: calcularCreditosPIS(dadosSped),
+                    cofins: calcularCreditosCOFINS(dadosSped),
+                    icms: calcularCreditosICMS(dadosSped),
+                    ipi: calcularCreditosIPI(dadosSped),
+                    iss: 0 // ISS não gera créditos
+                },
+
+                // Alíquotas efetivas calculadas
+                aliquotasEfetivas: {},
+
+                // Metadados para validação
+                fontesDados: {
+                    pis: debitos.pis && debitos.pis.length > 0 ? 'sped' : 'estimado',
+                    cofins: debitos.cofins && debitos.cofins.length > 0 ? 'sped' : 'estimado',
+                    icms: impostos.icms && impostos.icms.length > 0 ? 'sped' : 'estimado',
+                    ipi: impostos.ipi && impostos.ipi.length > 0 ? 'sped' : 'estimado',
+                    iss: 'estimado' // ISS não consta no SPED
+                },
+
+                // Período de referência dos dados
+                periodoReferencia: {
+                    dataInicial: dadosSped.empresa?.dataInicial || null,
+                    dataFinal: dadosSped.empresa?.dataFinal || null,
+                    mesesAnalisados: calcularMesesAnalisados(dadosSped)
+                }
+            },
+
+            // Dados complementares (mantidos para compatibilidade)
             creditos: {
                 pis: calcularCreditosPIS(dadosSped),
                 cofins: calcularCreditosCOFINS(dadosSped),
                 icms: calcularCreditosICMS(dadosSped),
                 ipi: calcularCreditosIPI(dadosSped),
-                cbs: 0, // Não aplicável ainda
-                ibs: 0  // Não aplicável ainda
+                cbs: 0,
+                ibs: 0
             },
-            debitos: {  // Adicionar objeto de débitos
-                pis: calcularDebitosPIS(dadosSped),
-                cofins: calcularDebitosCOFINS(dadosSped),
-                icms: calcularDebitosICMS(dadosSped),
-                ipi: calcularDebitosIPI(dadosSped)
-            },
-            possuiIncentivoICMS: incentivosICMS.possuiIncentivo,
-            percentualIncentivoICMS: incentivosICMS.percentualReducao / 100, // Converter para decimal
-            aliquotaIcms: dadosICMS.aliquotaEfetiva / 100, // Converter para decimal
-            baseCalculoIcms: dadosICMS.percentualBase / 100, // Converter para decimal
-            percAproveitamentoIcms: dadosICMS.percentualAproveitamento / 100, // Converter para decimal
-            aliquotaIpi: dadosIPI.aliquotaMedia / 100, // Converter para decimal
-            baseCalculoIpi: dadosIPI.percentualBase / 100, // Converter para decimal
-            percAproveitamentoIpi: dadosIPI.percentualAproveitamento / 100, // Converter para decimal
-            aliquotaIss: dadosISS.aliquotaMedia / 100, // Converter para decimal
-            baseCalculoPisCofins: dadosPisCofins.percentualBase / 100, // Converter para decimal
-            percAproveitamentoPisCofins: dadosPisCofins.percentualAproveitamento / 100 // Converter para decimal
+
+            // Dados de configuração específica por imposto
+            configuracaoImpostos: {
+                icms: {
+                    possuiIncentivo: incentivosICMS.possuiIncentivo,
+                    percentualReducao: incentivosICMS.percentualReducao / 100,
+                    aliquotaEfetiva: dadosICMS.aliquotaEfetiva / 100,
+                    baseCalculo: dadosICMS.percentualBase / 100,
+                    percAproveitamento: dadosICMS.percentualAproveitamento / 100
+                },
+                ipi: {
+                    aliquotaMedia: dadosIPI.aliquotaMedia / 100,
+                    baseCalculo: dadosIPI.percentualBase / 100,
+                    percAproveitamento: dadosIPI.percentualAproveitamento / 100
+                },
+                iss: {
+                    aliquotaMedia: dadosISS.aliquotaMedia / 100
+                },
+                pisCofins: {
+                    baseCalculo: dadosPisCofins.percentualBase / 100,
+                    percAproveitamento: dadosPisCofins.percentualAproveitamento / 100
+                }
+            }
         };
 
+        // Calcular alíquotas efetivas baseadas no faturamento real
+        if (faturamentoMensal > 0) {
+            const totalDebitos = Object.values(parametros.composicaoTributaria.debitos)
+                .reduce((sum, val) => sum + (val || 0), 0);
+
+            parametros.composicaoTributaria.aliquotasEfetivas = {
+                pis: (parametros.composicaoTributaria.debitos.pis / faturamentoMensal) * 100,
+                cofins: (parametros.composicaoTributaria.debitos.cofins / faturamentoMensal) * 100,
+                icms: (parametros.composicaoTributaria.debitos.icms / faturamentoMensal) * 100,
+                ipi: (parametros.composicaoTributaria.debitos.ipi / faturamentoMensal) * 100,
+                iss: (parametros.composicaoTributaria.debitos.iss / faturamentoMensal) * 100,
+                total: (totalDebitos / faturamentoMensal) * 100
+            };
+        } else {
+            parametros.composicaoTributaria.aliquotasEfetivas = {
+                pis: 0, cofins: 0, icms: 0, ipi: 0, iss: 0, total: 0
+            };
+        }
+
         return parametros;
+    }
+
+    /**
+     * Calcula o número de meses analisados no SPED
+     * @param {Object} dadosSped - Dados SPED
+     * @returns {number} Número de meses
+     */
+    function calcularMesesAnalisados(dadosSped) {
+        if (!dadosSped.empresa?.dataInicial || !dadosSped.empresa?.dataFinal) {
+            return 12; // Assume ano completo se não tiver datas
+        }
+
+        const dataInicial = new Date(dadosSped.empresa.dataInicial);
+        const dataFinal = new Date(dadosSped.empresa.dataFinal);
+
+        const diffTime = Math.abs(dataFinal - dataInicial);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        return Math.max(1, Math.round(diffDays / 30));
     }
     
     /**
@@ -940,71 +1031,160 @@ const SpedExtractor = (function() {
     }
     
     /**
-     * Calcula débitos de PIS
-     * @param {Object} dadosSped - Dados SPED
+     * Calcula débitos de PIS com base nos dados SPED
+     * @param {Object} dadosSped - Dados extraídos do SPED
      * @returns {number} Valor dos débitos de PIS
      */
     function calcularDebitosPIS(dadosSped) {
         let valorDebitos = 0;
 
+        // Primeiro, tenta obter dos registros M200 (apuração PIS)
         if (dadosSped.debitos && dadosSped.debitos.pis) {
             dadosSped.debitos.pis.forEach(debito => {
                 valorDebitos += debito.valorTotalContribuicao || 0;
             });
         }
 
-        return valorDebitos;
+        // Se não encontrou, calcula com base na receita e alíquota
+        if (valorDebitos === 0) {
+            const regime = determinarRegimeTributario(dadosSped);
+            let aliquotaPIS = 0;
+
+            if (regime === 'simples') {
+                // No Simples Nacional, PIS é incluído na alíquota única
+                return 0;
+            } else if (regime === 'presumido') {
+                aliquotaPIS = 0.0065; // 0.65%
+            } else {
+                aliquotaPIS = 0.0165; // 1.65%
+            }
+
+            const receitaTributavel = dadosSped.receitaBruta || 
+                                     calcularFaturamentoMensal(dadosSped) * 12;
+            valorDebitos = receitaTributavel * aliquotaPIS;
+        }
+
+        return valorDebitos / 12; // Retorna valor mensal
     }
 
     /**
-     * Calcula débitos de COFINS
-     * @param {Object} dadosSped - Dados SPED
+     * Calcula débitos de COFINS com base nos dados SPED
+     * @param {Object} dadosSped - Dados extraídos do SPED
      * @returns {number} Valor dos débitos de COFINS
      */
     function calcularDebitosCOFINS(dadosSped) {
         let valorDebitos = 0;
 
+        // Primeiro, tenta obter dos registros M600 (apuração COFINS)
         if (dadosSped.debitos && dadosSped.debitos.cofins) {
             dadosSped.debitos.cofins.forEach(debito => {
                 valorDebitos += debito.valorTotalContribuicao || 0;
             });
         }
 
-        return valorDebitos;
+        // Se não encontrou, calcula com base na receita e alíquota
+        if (valorDebitos === 0) {
+            const regime = determinarRegimeTributario(dadosSped);
+            let aliquotaCOFINS = 0;
+
+            if (regime === 'simples') {
+                // No Simples Nacional, COFINS é incluído na alíquota única
+                return 0;
+            } else if (regime === 'presumido') {
+                aliquotaCOFINS = 0.03; // 3%
+            } else {
+                aliquotaCOFINS = 0.076; // 7.6%
+            }
+
+            const receitaTributavel = dadosSped.receitaBruta || 
+                                     calcularFaturamentoMensal(dadosSped) * 12;
+            valorDebitos = receitaTributavel * aliquotaCOFINS;
+        }
+
+        return valorDebitos / 12; // Retorna valor mensal
     }
 
     /**
-     * Calcula débitos de ICMS
-     * @param {Object} dadosSped - Dados SPED
+     * Calcula débitos de ICMS com base nos dados SPED
+     * @param {Object} dadosSped - Dados extraídos do SPED
      * @returns {number} Valor dos débitos de ICMS
      */
     function calcularDebitosICMS(dadosSped) {
         let valorDebitos = 0;
 
+        // Obter dos registros E110 (apuração ICMS)
         if (dadosSped.impostos && dadosSped.impostos.icms) {
             dadosSped.impostos.icms.forEach(apuracao => {
                 valorDebitos += apuracao.valorTotalDebitos || 0;
             });
         }
 
-        return valorDebitos;
+        // Se não encontrou, estima com base no faturamento e alíquota média
+        if (valorDebitos === 0) {
+            const tipoEmpresa = determinarTipoEmpresa(dadosSped);
+
+            if (tipoEmpresa !== 'servicos') { // ICMS não se aplica a serviços
+                const faturamento = calcularFaturamentoMensal(dadosSped) * 12;
+                const aliquotaMedia = 0.18; // 18% como padrão
+                const baseCalculoPerc = 0.6; // 60% do faturamento sujeito ao ICMS
+
+                valorDebitos = faturamento * baseCalculoPerc * aliquotaMedia;
+            }
+        }
+
+        return valorDebitos / 12; // Retorna valor mensal
     }
 
     /**
-     * Calcula débitos de IPI
-     * @param {Object} dadosSped - Dados SPED
+     * Calcula débitos de IPI com base nos dados SPED
+     * @param {Object} dadosSped - Dados extraídos do SPED
      * @returns {number} Valor dos débitos de IPI
      */
     function calcularDebitosIPI(dadosSped) {
         let valorDebitos = 0;
 
+        // IPI só se aplica à indústria
+        const tipoEmpresa = determinarTipoEmpresa(dadosSped);
+        if (tipoEmpresa !== 'industria') {
+            return 0;
+        }
+
+        // Obter dos registros de apuração IPI
         if (dadosSped.impostos && dadosSped.impostos.ipi) {
             dadosSped.impostos.ipi.forEach(apuracao => {
                 valorDebitos += apuracao.valorTotalDebitos || 0;
             });
         }
 
-        return valorDebitos;
+        // Se não encontrou, estima com base no faturamento
+        if (valorDebitos === 0) {
+            const faturamento = calcularFaturamentoMensal(dadosSped) * 12;
+            const aliquotaMedia = 0.10; // 10% como padrão
+            const baseCalculoPerc = 0.4; // 40% do faturamento sujeito ao IPI
+
+            valorDebitos = faturamento * baseCalculoPerc * aliquotaMedia;
+        }
+
+        return valorDebitos / 12; // Retorna valor mensal
+    }
+
+    /**
+     * Calcula débitos de ISS com base nos dados disponíveis
+     * @param {Object} dadosSped - Dados extraídos do SPED
+     * @returns {number} Valor dos débitos de ISS
+     */
+    function calcularDebitosISS(dadosSped) {
+        // ISS só se aplica a serviços
+        const tipoEmpresa = determinarTipoEmpresa(dadosSped);
+        if (tipoEmpresa !== 'servicos') {
+            return 0;
+        }
+
+        // ISS não consta no SPED, então estimamos
+        const faturamento = calcularFaturamentoMensal(dadosSped) * 12;
+        const aliquotaMedia = 0.05; // 5% como padrão
+
+        return (faturamento * aliquotaMedia) / 12; // Retorna valor mensal
     }
 
     /**

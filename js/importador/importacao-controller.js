@@ -587,133 +587,298 @@ const ImportacaoController = (function() {
     }
 
     /**
-     * Preenche os parâmetros fiscais no formulário
-     * @param {Object} parametrosFiscais - Parâmetros fiscais
+     * Função utilitária para formatação segura de moeda
+     * @param {number} valor - Valor a ser formatado
+     * @returns {string} Valor formatado como moeda brasileira
+     */
+    function formatarMoedaUtilitario(valor) {
+        if (typeof valor !== 'number' || isNaN(valor)) {
+            valor = 0;
+        }
+
+        try {
+            // Primeiro, tentar usar o formatador global se disponível
+            if (typeof window.CalculationCore !== 'undefined' && 
+                typeof window.CalculationCore.formatarMoeda === 'function') {
+                return window.CalculationCore.formatarMoeda(valor);
+            }
+
+            // Segundo, tentar usar DataManager
+            if (typeof window.DataManager !== 'undefined' && 
+                typeof window.DataManager.formatarMoeda === 'function') {
+                return window.DataManager.formatarMoeda(valor);
+            }
+
+            // Terceiro, usar Intl nativo
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(valor);
+
+        } catch (erro) {
+            console.warn('Erro na formatação de moeda, usando fallback:', erro);
+
+            // Fallback final: formatação manual
+            const valorAbsoluto = Math.abs(valor);
+            const sinal = valor < 0 ? '-' : '';
+            const parteInteira = Math.floor(valorAbsoluto);
+            const parteDecimal = Math.round((valorAbsoluto - parteInteira) * 100);
+
+            const inteiraFormatada = parteInteira.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            const decimalFormatada = parteDecimal.toString().padStart(2, '0');
+
+            return `${sinal}R$ ${inteiraFormatada},${decimalFormatada}`;
+        }
+    }
+    
+    /**
+     * Preenche os parâmetros fiscais no formulário, priorizando o painel detalhado
+     * @param {Object} parametrosFiscais - Parâmetros fiscais extraídos do SPED
      */
     function preencherParametrosFiscais(parametrosFiscais) {
-        // Tipo de operação
-        const campoTipoOperacao = document.getElementById('tipo-operacao');
-        if (campoTipoOperacao && parametrosFiscais.tipoOperacao) {
-            campoTipoOperacao.value = parametrosFiscais.tipoOperacao;
-            campoTipoOperacao.dispatchEvent(new Event('change'));
-        }
-
-        // Regime PIS/COFINS
-        const campoPisCofinsRegime = document.getElementById('pis-cofins-regime');
-        if (campoPisCofinsRegime && parametrosFiscais.regimePisCofins) {
-            campoPisCofinsRegime.value = parametrosFiscais.regimePisCofins;
-            campoPisCofinsRegime.dispatchEvent(new Event('change'));
-        }
-
-        // Base de cálculo PIS/COFINS
-        const campoBaseCalcPisCofins = document.getElementById('pis-cofins-base-calc');
-        if (campoBaseCalcPisCofins && parametrosFiscais.baseCalculoPisCofins) {
-            // Converte decimal para percentual
-            campoBaseCalcPisCofins.value = (parametrosFiscais.baseCalculoPisCofins * 100).toFixed(1);
-            campoBaseCalcPisCofins.dispatchEvent(new Event('input'));
-        }
-
-        // Percentual de aproveitamento PIS/COFINS
-        const campoPercCreditoPisCofins = document.getElementById('pis-cofins-perc-credito');
-        if (campoPercCreditoPisCofins && parametrosFiscais.percAproveitamentoPisCofins) {
-            // Converte decimal para percentual
-            campoPercCreditoPisCofins.value = (parametrosFiscais.percAproveitamentoPisCofins * 100).toFixed(1);
-            campoPercCreditoPisCofins.dispatchEvent(new Event('input'));
-        }
-
-        // Alíquota ICMS
-        const campoAliquotaIcms = document.getElementById('aliquota-icms');
-        if (campoAliquotaIcms && parametrosFiscais.aliquotaIcms) {
-            // Converte decimal para percentual
-            campoAliquotaIcms.value = (parametrosFiscais.aliquotaIcms * 100).toFixed(1);
-            campoAliquotaIcms.dispatchEvent(new Event('input'));
-        }
-
-        // Base de cálculo ICMS
-        const campoBaseCalcIcms = document.getElementById('icms-base-calc');
-        if (campoBaseCalcIcms && parametrosFiscais.baseCalculoIcms) {
-            // Converte decimal para percentual
-            campoBaseCalcIcms.value = (parametrosFiscais.baseCalculoIcms * 100).toFixed(1);
-            campoBaseCalcIcms.dispatchEvent(new Event('input'));
-        }
-
-        // Percentual de aproveitamento ICMS
-        const campoPercCreditoIcms = document.getElementById('icms-perc-credito');
-        if (campoPercCreditoIcms && parametrosFiscais.percAproveitamentoIcms) {
-            // Converte decimal para percentual
-            campoPercCreditoIcms.value = (parametrosFiscais.percAproveitamentoIcms * 100).toFixed(1);
-            campoPercCreditoIcms.dispatchEvent(new Event('input'));
-        }
-
-        // Incentivo ICMS
-        const campoIncentivoIcms = document.getElementById('possui-incentivo-icms');
-        const campoPercentualIncentivo = document.getElementById('incentivo-icms');
-
-        if (campoIncentivoIcms && parametrosFiscais.possuiIncentivoICMS !== undefined) {
-            campoIncentivoIcms.checked = parametrosFiscais.possuiIncentivoICMS;
-            campoIncentivoIcms.dispatchEvent(new Event('change'));
-
-            if (parametrosFiscais.possuiIncentivoICMS && campoPercentualIncentivo && 
-                parametrosFiscais.percentualIncentivoICMS) {
-                // Converte decimal para percentual
-                campoPercentualIncentivo.value = (parametrosFiscais.percentualIncentivoICMS * 100).toFixed(1);
+        try {
+            // PRIORIDADE 1: Preencher painel "Composição Tributária Detalhada"
+            if (parametrosFiscais.composicaoTributaria) {
+                preencherPainelComposicaoTributaria(parametrosFiscais.composicaoTributaria);
+                adicionarLog('Painel de Composição Tributária Detalhada preenchido com dados do SPED.', 'success');
             }
-        }
 
-        // Alíquota IPI
-        const campoAliquotaIpi = document.getElementById('aliquota-ipi');
-        if (campoAliquotaIpi && parametrosFiscais.aliquotaIpi) {
-            // Converte decimal para percentual
-            campoAliquotaIpi.value = (parametrosFiscais.aliquotaIpi * 100).toFixed(1);
-            campoAliquotaIpi.dispatchEvent(new Event('input'));
-        }
+            // Tipo de operação
+            const campoTipoOperacao = document.getElementById('tipo-operacao');
+            if (campoTipoOperacao && parametrosFiscais.tipoOperacao) {
+                campoTipoOperacao.value = parametrosFiscais.tipoOperacao;
+                campoTipoOperacao.dispatchEvent(new Event('change'));
+            }
 
-        // Base de cálculo IPI
-        const campoBaseCalcIpi = document.getElementById('ipi-base-calc');
-        if (campoBaseCalcIpi && parametrosFiscais.baseCalculoIpi) {
-            // Converte decimal para percentual
-            campoBaseCalcIpi.value = (parametrosFiscais.baseCalculoIpi * 100).toFixed(1);
-            campoBaseCalcIpi.dispatchEvent(new Event('input'));
-        }
+            // Regime PIS/COFINS
+            const campoPisCofinsRegime = document.getElementById('pis-cofins-regime');
+            if (campoPisCofinsRegime && parametrosFiscais.regimePisCofins) {
+                campoPisCofinsRegime.value = parametrosFiscais.regimePisCofins;
+                campoPisCofinsRegime.dispatchEvent(new Event('change'));
+            }
 
-        // Percentual de aproveitamento IPI
-        const campoPercCreditoIpi = document.getElementById('ipi-perc-credito');
-        if (campoPercCreditoIpi && parametrosFiscais.percAproveitamentoIpi) {
-            // Converte decimal para percentual
-            campoPercCreditoIpi.value = (parametrosFiscais.percAproveitamentoIpi * 100).toFixed(1);
-            campoPercCreditoIpi.dispatchEvent(new Event('input'));
-        }
+            // PRIORIDADE 2: Preencher campos complementares apenas se não houver dados do SPED
+            const configImpostos = parametrosFiscais.configuracaoImpostos || {};
 
-        // Alíquota ISS
-        const campoAliquotaIss = document.getElementById('aliquota-iss');
-        if (campoAliquotaIss && parametrosFiscais.aliquotaIss) {
-            // Converte decimal para percentual
-            campoAliquotaIss.value = (parametrosFiscais.aliquotaIss * 100).toFixed(1);
-            campoAliquotaIss.dispatchEvent(new Event('input'));
-        }
-        
-        // Adicionar preenchimento dos campos de débitos, se existirem no formulário
-        const camposDebitos = [
-            { id: 'debitos-pis-calc', valor: parametrosFiscais.debitos?.pis || 0 },
-            { id: 'debitos-cofins-calc', valor: parametrosFiscais.debitos?.cofins || 0 },
-            { id: 'debitos-icms-calc', valor: parametrosFiscais.debitos?.icms || 0 },
-            { id: 'debitos-ipi-calc', valor: parametrosFiscais.debitos?.ipi || 0 }
-        ];
+            // Base de cálculo PIS/COFINS (apenas se não há dados detalhados do SPED)
+            const fontesDados = parametrosFiscais.composicaoTributaria?.fontesDados;
+            const temDadosSpedPis = fontesDados?.pis === 'sped';
 
-        camposDebitos.forEach(campo => {
-            const elemento = document.getElementById(campo.id);
-            if (elemento) {
-                if (typeof window.CurrencyFormatter !== 'undefined' && 
-                    typeof window.CurrencyFormatter.formatarValorMonetario === 'function') {
-                    elemento.value = window.CurrencyFormatter.formatarValorMonetario(campo.valor * 100);
-                } else {
-                    elemento.value = formatarMoeda(campo.valor);
+            if (!temDadosSpedPis && configImpostos.pisCofins) {
+                const campoBaseCalcPisCofins = document.getElementById('pis-cofins-base-calc');
+                if (campoBaseCalcPisCofins && configImpostos.pisCofins.baseCalculo) {
+                    campoBaseCalcPisCofins.value = (configImpostos.pisCofins.baseCalculo * 100).toFixed(1);
+                    campoBaseCalcPisCofins.dispatchEvent(new Event('input'));
+                }
+
+                const campoPercCreditoPisCofins = document.getElementById('pis-cofins-perc-credito');
+                if (campoPercCreditoPisCofins && configImpostos.pisCofins.percAproveitamento) {
+                    campoPercCreditoPisCofins.value = (configImpostos.pisCofins.percAproveitamento * 100).toFixed(1);
+                    campoPercCreditoPisCofins.dispatchEvent(new Event('input'));
                 }
             }
-        });
 
-        // Atualiza os campos de créditos calculados
-        calcularCreditosTributarios();
+            // Configurações ICMS (apenas se não há dados detalhados do SPED)
+            const temDadosSpedIcms = fontesDados?.icms === 'sped';
+
+            if (!temDadosSpedIcms && configImpostos.icms) {
+                const campoAliquotaIcms = document.getElementById('aliquota-icms');
+                if (campoAliquotaIcms && configImpostos.icms.aliquotaEfetiva) {
+                    campoAliquotaIcms.value = (configImpostos.icms.aliquotaEfetiva * 100).toFixed(1);
+                    campoAliquotaIcms.dispatchEvent(new Event('input'));
+                }
+
+                // Incentivo ICMS
+                const campoIncentivoIcms = document.getElementById('possui-incentivo-icms');
+                const campoPercentualIncentivo = document.getElementById('incentivo-icms');
+
+                if (campoIncentivoIcms && configImpostos.icms.possuiIncentivo !== undefined) {
+                    campoIncentivoIcms.checked = configImpostos.icms.possuiIncentivo;
+                    campoIncentivoIcms.dispatchEvent(new Event('change'));
+
+                    if (configImpostos.icms.possuiIncentivo && campoPercentualIncentivo && 
+                        configImpostos.icms.percentualReducao) {
+                        campoPercentualIncentivo.value = (configImpostos.icms.percentualReducao * 100).toFixed(1);
+                    }
+                }
+            }
+
+            // Mostrar indicadores de origem dos dados
+            if (fontesDados) {
+                mostrarIndicadoresOrigemDados(fontesDados);
+            }
+
+            // Atualizar os cálculos dependentes se a função estiver disponível
+            if (typeof calcularCreditosTributarios === 'function') {
+                try {
+                    calcularCreditosTributarios();
+                } catch (erro) {
+                    console.warn('Erro ao recalcular créditos tributários:', erro);
+                }
+            }
+
+            adicionarLog('Parâmetros fiscais preenchidos com sucesso.', 'success');
+
+        } catch (erro) {
+            console.error('Erro ao preencher parâmetros fiscais:', erro);
+            adicionarLog('Erro ao preencher parâmetros fiscais: ' + erro.message, 'error');
+        }
+    }
+
+    /**
+     * Preenche especificamente o painel de Composição Tributária Detalhada
+     * @param {Object} composicaoTributaria - Dados da composição tributária do SPED
+     */
+    function preencherPainelComposicaoTributaria(composicaoTributaria) {
+        /**
+         * Formata valor monetário de forma segura, sem recursão
+         * @param {number} valor - Valor a ser formatado
+         * @returns {string} Valor formatado como moeda
+         */
+        const formatarMoedaSeguro = (valor) => {
+            if (typeof valor !== 'number' || isNaN(valor)) {
+                valor = 0;
+            }
+
+            // Tentar usar CurrencyFormatter se disponível
+            if (typeof window.CurrencyFormatter !== 'undefined' && 
+                typeof window.CurrencyFormatter.formatarValorMonetario === 'function') {
+                try {
+                    return window.CurrencyFormatter.formatarValorMonetario(valor);
+                } catch (erro) {
+                    console.warn('Erro ao usar CurrencyFormatter:', erro);
+                }
+            }
+
+            // Fallback: formatação manual usando Intl
+            try {
+                return new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }).format(valor);
+            } catch (erro) {
+                console.warn('Erro na formatação Intl:', erro);
+                // Fallback final: formatação básica
+                return `R$ ${valor.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+            }
+        };
+
+        // Preencher débitos
+        const debitos = composicaoTributaria.debitos || {};
+        const elementoDebitoPis = document.getElementById('debito-pis');
+        const elementoDebitoCofins = document.getElementById('debito-cofins');
+        const elementoDebitoIcms = document.getElementById('debito-icms');
+        const elementoDebitoIpi = document.getElementById('debito-ipi');
+        const elementoDebitoIss = document.getElementById('debito-iss');
+
+        if (elementoDebitoPis) elementoDebitoPis.value = formatarMoedaSeguro(debitos.pis || 0);
+        if (elementoDebitoCofins) elementoDebitoCofins.value = formatarMoedaSeguro(debitos.cofins || 0);
+        if (elementoDebitoIcms) elementoDebitoIcms.value = formatarMoedaSeguro(debitos.icms || 0);
+        if (elementoDebitoIpi) elementoDebitoIpi.value = formatarMoedaSeguro(debitos.ipi || 0);
+        if (elementoDebitoIss) elementoDebitoIss.value = formatarMoedaSeguro(debitos.iss || 0);
+
+        // Preencher créditos
+        const creditos = composicaoTributaria.creditos || {};
+        const elementoCreditoPis = document.getElementById('credito-pis');
+        const elementoCreditoCofins = document.getElementById('credito-cofins');
+        const elementoCreditoIcms = document.getElementById('credito-icms');
+        const elementoCreditoIpi = document.getElementById('credito-ipi');
+        const elementoCreditoIss = document.getElementById('credito-iss');
+
+        if (elementoCreditoPis) elementoCreditoPis.value = formatarMoedaSeguro(creditos.pis || 0);
+        if (elementoCreditoCofins) elementoCreditoCofins.value = formatarMoedaSeguro(creditos.cofins || 0);
+        if (elementoCreditoIcms) elementoCreditoIcms.value = formatarMoedaSeguro(creditos.icms || 0);
+        if (elementoCreditoIpi) elementoCreditoIpi.value = formatarMoedaSeguro(creditos.ipi || 0);
+        if (elementoCreditoIss) elementoCreditoIss.value = formatarMoedaSeguro(creditos.iss || 0);
+
+        // Preencher alíquotas efetivas com validação
+        const aliquotas = composicaoTributaria.aliquotasEfetivas || {};
+        const formatarAliquota = (valor) => {
+            if (typeof valor !== 'number' || isNaN(valor)) return '0.000';
+            return valor.toFixed(3);
+        };
+
+        const elementoAliquotaPis = document.getElementById('aliquota-efetiva-pis');
+        const elementoAliquotaCofins = document.getElementById('aliquota-efetiva-cofins');
+        const elementoAliquotaIcms = document.getElementById('aliquota-efetiva-icms');
+        const elementoAliquotaIpi = document.getElementById('aliquota-efetiva-ipi');
+        const elementoAliquotaIss = document.getElementById('aliquota-efetiva-iss');
+
+        if (elementoAliquotaPis) elementoAliquotaPis.value = formatarAliquota(aliquotas.pis || 0);
+        if (elementoAliquotaCofins) elementoAliquotaCofins.value = formatarAliquota(aliquotas.cofins || 0);
+        if (elementoAliquotaIcms) elementoAliquotaIcms.value = formatarAliquota(aliquotas.icms || 0);
+        if (elementoAliquotaIpi) elementoAliquotaIpi.value = formatarAliquota(aliquotas.ipi || 0);
+        if (elementoAliquotaIss) elementoAliquotaIss.value = formatarAliquota(aliquotas.iss || 0);
+
+        // Calcular e preencher totais
+        const totalDebitos = Object.values(debitos).reduce((sum, val) => sum + (typeof val === 'number' ? val : 0), 0);
+        const totalCreditos = Object.values(creditos).reduce((sum, val) => sum + (typeof val === 'number' ? val : 0), 0);
+
+        const elementoTotalDebitos = document.getElementById('total-debitos');
+        const elementoTotalCreditos = document.getElementById('total-creditos');
+        const elementoAliquotaTotal = document.getElementById('aliquota-efetiva-total');
+
+        if (elementoTotalDebitos) elementoTotalDebitos.value = formatarMoedaSeguro(totalDebitos);
+        if (elementoTotalCreditos) elementoTotalCreditos.value = formatarMoedaSeguro(totalCreditos);
+        if (elementoAliquotaTotal) elementoAliquotaTotal.value = formatarAliquota(aliquotas.total || 0);
+
+        // Marcar campos como preenchidos pelo SPED
+        const camposPreenchidos = [
+            'debito-pis', 'debito-cofins', 'debito-icms', 'debito-ipi', 'debito-iss',
+            'credito-pis', 'credito-cofins', 'credito-icms', 'credito-ipi', 'credito-iss',
+            'aliquota-efetiva-pis', 'aliquota-efetiva-cofins', 'aliquota-efetiva-icms', 
+            'aliquota-efetiva-ipi', 'aliquota-efetiva-iss', 'aliquota-efetiva-total',
+            'total-debitos', 'total-creditos'
+        ];
+
+        marcarCamposSpedPreenchidos(camposPreenchidos);
+
+        // Log de confirmação
+        console.log('Painel de Composição Tributária preenchido com sucesso:', {
+            totalDebitos: totalDebitos,
+            totalCreditos: totalCreditos,
+            aliquotaTotal: aliquotas.total || 0
+        });
+    }
+
+    /**
+     * Marca visualmente os campos preenchidos pelo SPED
+     * @param {Array} camposIds - IDs dos campos preenchidos
+     */
+    function marcarCamposSpedPreenchidos(camposIds) {
+        camposIds.forEach(id => {
+            const elemento = document.getElementById(id);
+            if (elemento) {
+                elemento.classList.add('sped-data');
+                elemento.title = 'Dados importados do SPED';
+                elemento.style.borderLeft = '3px solid #28a745';
+            }
+        });
+    }
+
+    /**
+     * Mostra indicadores visuais da origem dos dados
+     * @param {Object} fontesDados - Mapeamento da fonte dos dados por imposto
+     */
+    function mostrarIndicadoresOrigemDados(fontesDados) {
+        if (!fontesDados) return;
+
+        Object.entries(fontesDados).forEach(([imposto, fonte]) => {
+            const indicador = document.createElement('span');
+            indicador.className = `fonte-dados ${fonte}`;
+            indicador.textContent = fonte === 'sped' ? 'SPED' : 'EST';
+            indicador.title = fonte === 'sped' ? 'Dados extraídos do SPED' : 'Dados estimados';
+
+            // Adicionar indicador próximo aos campos relevantes
+            const campoDebito = document.getElementById(`debito-${imposto}`);
+            if (campoDebito && !campoDebito.parentNode.querySelector('.fonte-dados')) {
+                campoDebito.parentNode.appendChild(indicador.cloneNode(true));
+            }
+        });
     }
 
     /**

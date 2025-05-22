@@ -121,6 +121,7 @@ const SpedParser = (function() {
         }
 
         // Processa as linhas
+        // Dentro da função extrairDados, substituir o bloco try/catch existente:
         for (const linha of linhas) {
             if (!linha.trim()) continue;
 
@@ -132,11 +133,22 @@ const SpedParser = (function() {
                 try {
                     // Processa o registro com a função específica
                     const dadosRegistro = registrosMapeados[tipoSped][registro](campos);
-                    if (dadosRegistro) {
+
+                    // Só integra se o resultado for válido
+                    if (dadosRegistro && dadosRegistro !== null) {
                         integrarDados(resultado, dadosRegistro, registro);
                     }
                 } catch (erro) {
-                    console.error(`Erro ao processar registro ${registro}:`, erro);
+                    // Log mais detalhado do erro sem interromper o processamento
+                    console.warn(`Erro ao processar registro ${registro}:`, {
+                        erro: erro.message,
+                        linha: linha.substring(0, 100) + '...',
+                        campos: campos.length,
+                        tipoSped: tipoSped
+                    });
+                    
+                    // Continua processamento dos demais registros
+                    continue;
                 }
             }
         }
@@ -331,6 +343,44 @@ const SpedParser = (function() {
         }
         return null;
     }
+    
+    /**
+     * Valida se um campo existe e retorna valor tratado
+     * @param {Array} campos - Array de campos do registro
+     * @param {number} indice - Índice do campo a ser validado
+     * @param {string} valorPadrao - Valor padrão se campo não existir
+     * @returns {string} Valor do campo ou valor padrão
+     */
+    function validarCampo(campos, indice, valorPadrao = '') {
+        if (!campos || !Array.isArray(campos) || indice >= campos.length || campos[indice] === undefined) {
+            return valorPadrao;
+        }
+        return campos[indice] || valorPadrao;
+    }
+
+    /**
+     * Converte string monetária para número com validação
+     * @param {string} valor - Valor em formato string
+     * @returns {number} Valor convertido para número
+     */
+    function converterValorMonetario(valor) {
+        if (!valor || typeof valor !== 'string') {
+            return 0;
+        }
+        const valorLimpo = valor.replace(',', '.');
+        const resultado = parseFloat(valorLimpo);
+        return isNaN(resultado) ? 0 : resultado;
+    }
+
+    /**
+     * Valida estrutura mínima de um registro SPED
+     * @param {Array} campos - Array de campos do registro
+     * @param {number} tamanhoMinimo - Número mínimo de campos esperados
+     * @returns {boolean} True se estrutura é válida
+     */
+    function validarEstruturaRegistro(campos, tamanhoMinimo) {
+        return campos && Array.isArray(campos) && campos.length >= tamanhoMinimo;
+    }
 
     // Funções de parsing para cada tipo de registro
 
@@ -372,21 +422,31 @@ const SpedParser = (function() {
     }
 
     function parseRegistroC100(campos) {
-        return {
-            tipo: 'documento',
-            indOper: campos[2], // 0=Entrada, 1=Saída
-            indEmit: campos[3], // 0=Própria, 1=Terceiros
-            codPart: campos[4],
-            modelo: campos[5],
-            situacao: campos[6],
-            serie: campos[7],
-            numero: campos[8],
-            chaveNFe: campos[9],
-            dataEmissao: campos[10],
-            dataSaidaEntrada: campos[11],
-            valorTotal: parseFloat(campos[12].replace(',', '.')),
-            valorProdutos: parseFloat(campos[16].replace(',', '.'))
-        };
+        if (!validarEstruturaRegistro(campos, 13)) {
+            console.warn('Registro C100 com estrutura insuficiente');
+            return null;
+        }
+
+        try {
+            return {
+                tipo: 'documento',
+                indOper: validarCampo(campos, 2),
+                indEmit: validarCampo(campos, 3),
+                codPart: validarCampo(campos, 4),
+                modelo: validarCampo(campos, 5),
+                situacao: validarCampo(campos, 6),
+                serie: validarCampo(campos, 7),
+                numero: validarCampo(campos, 8),
+                chaveNFe: validarCampo(campos, 9),
+                dataEmissao: validarCampo(campos, 10),
+                dataSaidaEntrada: validarCampo(campos, 11),
+                valorTotal: converterValorMonetario(validarCampo(campos, 12, '0')),
+                valorProdutos: converterValorMonetario(validarCampo(campos, 16, '0'))
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro C100:', erro.message);
+            return null;
+        }
     }
 
     function parseRegistroC170(campos) {
@@ -486,35 +546,45 @@ const SpedParser = (function() {
     }
     
     function parseRegistroM200(campos) {
-        if (campos.length < 14) {
-            console.warn('Registro M200 (PIS) com estrutura incompleta');
+        if (!validarEstruturaRegistro(campos, 14)) {
+            console.warn('Registro M200 (PIS) com estrutura insuficiente');
             return null;
         }
 
-        return {
-            tipo: 'debito',
-            categoria: 'pis',
-            valorTotalContribuicao: parseFloat(campos[10]?.replace(',', '.') || '0'),
-            valorTotalRetencoes: parseFloat(campos[11]?.replace(',', '.') || '0'),
-            valorTotalDeducoes: parseFloat(campos[12]?.replace(',', '.') || '0'),
-            valorTotalPago: parseFloat(campos[13]?.replace(',', '.') || '0')
-        };
+        try {
+            return {
+                tipo: 'debito',
+                categoria: 'pis',
+                valorTotalContribuicao: converterValorMonetario(validarCampo(campos, 10, '0')),
+                valorTotalRetencoes: converterValorMonetario(validarCampo(campos, 11, '0')),
+                valorTotalDeducoes: converterValorMonetario(validarCampo(campos, 12, '0')),
+                valorTotalPago: converterValorMonetario(validarCampo(campos, 13, '0'))
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro M200:', erro.message);
+            return null;
+        }
     }
 
     function parseRegistroM600(campos) {
-        if (campos.length < 14) {
-            console.warn('Registro M600 (COFINS) com estrutura incompleta');
+        if (!validarEstruturaRegistro(campos, 14)) {
+            console.warn('Registro M600 (COFINS) com estrutura insuficiente');
             return null;
         }
 
-        return {
-            tipo: 'debito',
-            categoria: 'cofins',
-            valorTotalContribuicao: parseFloat(campos[10]?.replace(',', '.') || '0'),
-            valorTotalRetencoes: parseFloat(campos[11]?.replace(',', '.') || '0'),
-            valorTotalDeducoes: parseFloat(campos[12]?.replace(',', '.') || '0'),
-            valorTotalPago: parseFloat(campos[13]?.replace(',', '.') || '0')
-        };
+        try {
+            return {
+                tipo: 'debito',
+                categoria: 'cofins',
+                valorTotalContribuicao: converterValorMonetario(validarCampo(campos, 10, '0')),
+                valorTotalRetencoes: converterValorMonetario(validarCampo(campos, 11, '0')),
+                valorTotalDeducoes: converterValorMonetario(validarCampo(campos, 12, '0')),
+                valorTotalPago: converterValorMonetario(validarCampo(campos, 13, '0'))
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro M600:', erro.message);
+            return null;
+        }
     }
 
     function parseRegistroM210(campos) {
@@ -655,23 +725,45 @@ const SpedParser = (function() {
     }
 
     function parseRegistroN660ECF(campos) {
-        return {
-            tipo: 'calculo_irpj',
-            baseCalculoIRPJ: parseFloat(campos[5].replace(',', '.')) || 0,
-            aliquotaIRPJ: parseFloat(campos[6].replace(',', '.')) || 0,
-            valorIRPJ: parseFloat(campos[7].replace(',', '.')) || 0,
-            baseCalculoAdicional: parseFloat(campos[8].replace(',', '.')) || 0,
-            valorAdicional: parseFloat(campos[9].replace(',', '.')) || 0
-        };
+        // Validar estrutura mínima do registro
+        if (!validarEstruturaRegistro(campos, 6)) {
+            console.warn('Registro N660 com estrutura insuficiente, campos disponíveis:', campos ? campos.length : 0);
+            return null;
+        }
+
+        try {
+            return {
+                tipo: 'calculo_irpj',
+                baseCalculoIRPJ: converterValorMonetario(validarCampo(campos, 5, '0')),
+                aliquotaIRPJ: converterValorMonetario(validarCampo(campos, 6, '0')),
+                valorIRPJ: converterValorMonetario(validarCampo(campos, 7, '0')),
+                baseCalculoAdicional: converterValorMonetario(validarCampo(campos, 8, '0')),
+                valorAdicional: converterValorMonetario(validarCampo(campos, 9, '0'))
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro N660:', erro.message);
+            return null;
+        }
     }
 
     function parseRegistroN670ECF(campos) {
-        return {
-            tipo: 'calculo_csll',
-            baseCalculoCSLL: parseFloat(campos[5].replace(',', '.')) || 0,
-            aliquotaCSLL: parseFloat(campos[6].replace(',', '.')) || 0,
-            valorCSLL: parseFloat(campos[7].replace(',', '.')) || 0
-        };
+        // Validar estrutura mínima do registro
+        if (!validarEstruturaRegistro(campos, 6)) {
+            console.warn('Registro N670 com estrutura insuficiente, campos disponíveis:', campos ? campos.length : 0);
+            return null;
+        }
+
+        try {
+            return {
+                tipo: 'calculo_csll',
+                baseCalculoCSLL: converterValorMonetario(validarCampo(campos, 5, '0')),
+                aliquotaCSLL: converterValorMonetario(validarCampo(campos, 6, '0')),
+                valorCSLL: converterValorMonetario(validarCampo(campos, 7, '0'))
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro N670:', erro.message);
+            return null;
+        }
     }
 
     function parseRegistroY540ECF(campos) {
@@ -744,102 +836,139 @@ const SpedParser = (function() {
      * Integra dados extraídos ao resultado
      */
     function integrarDados(resultado, dados, tipoRegistro) {
-        if (!dados || !dados.tipo) return;
+        if (!dados || !dados.tipo) {
+            console.warn(`Dados inválidos para integração do registro ${tipoRegistro}`);
+            return;
+        }
 
-        switch (dados.tipo) {
-            case 'empresa':
-                resultado.empresa = {...resultado.empresa, ...dados};
-                break;
-            case 'documento':
-                resultado.documentos.push(dados);
-                break;
-            case 'item':
-                resultado.itens.push(dados);
-                break;
-            case 'item_analitico':
-                if (!resultado.itensAnaliticos) resultado.itensAnaliticos = [];
-                resultado.itensAnaliticos.push(dados);
-                break;
-            case 'ajuste':
-                if (!resultado.ajustes) resultado.ajustes = {};
-                if (!resultado.ajustes[dados.categoria]) resultado.ajustes[dados.categoria] = [];
-                resultado.ajustes[dados.categoria].push(dados);
-                break;
-            case 'imposto':
-                if (!resultado.impostos[dados.categoria]) {
-                    resultado.impostos[dados.categoria] = [];
-                }
-                resultado.impostos[dados.categoria].push(dados);
-                break;
-            case 'debito':
-                if (!resultado.debitos) resultado.debitos = {};
-                if (!resultado.debitos[dados.categoria]) {
-                    resultado.debitos[dados.categoria] = [];
-                }
-                resultado.debitos[dados.categoria].push(dados);
-                break;
-            case 'credito':
-            case 'credito_detalhe':
-                if (!resultado.creditos[dados.categoria]) {
-                    resultado.creditos[dados.categoria] = [];
-                }
-                resultado.creditos[dados.categoria].push(dados);
-                break;
-            case 'receita_nao_tributada':
-                if (!resultado.receitasNaoTributadas) resultado.receitasNaoTributadas = {};
-                if (!resultado.receitasNaoTributadas[dados.categoria]) {
-                    resultado.receitasNaoTributadas[dados.categoria] = [];
-                }
-                resultado.receitasNaoTributadas[dados.categoria].push(dados);
-                break;
-            case 'regime':
-                if (!resultado.regimes) resultado.regimes = {};
-                resultado.regimes[dados.categoria] = dados;
-                break;
-            case 'inventario':
-                if (!resultado.inventario) resultado.inventario = [];
-                resultado.inventario.push(dados);
-                break;
-            case 'participante':
-                if (!resultado.participantes) resultado.participantes = [];
-                resultado.participantes.push(dados);
-                break;
-            case 'incentivo_fiscal':
-                if (!resultado.incentivosFiscais) resultado.incentivosFiscais = [];
-                resultado.incentivosFiscais.push(dados);
-                break;
-            case 'dre':
-                if (!resultado.dre) resultado.dre = {};
-                resultado.dre[dados.categoria] = dados;
-                break;
-            case 'calculo_irpj':
-                if (!resultado.calculoImposto) resultado.calculoImposto = {};
-                resultado.calculoImposto.irpj = dados;
-                break;
-            case 'calculo_csll':
-                if (!resultado.calculoImposto) resultado.calculoImposto = {};
-                resultado.calculoImposto.csll = dados;
-                break;
-            case 'discriminacao_receita':
-                if (!resultado.discriminacaoReceita) resultado.discriminacaoReceita = [];
-                resultado.discriminacaoReceita.push(dados);
-                break;
-            case 'lancamento_contabil':
-                if (!resultado.lancamentosContabeis) resultado.lancamentosContabeis = [];
-                resultado.lancamentosContabeis.push(dados);
-                break;
-            case 'partida_lancamento':
-                if (!resultado.partidasLancamento) resultado.partidasLancamento = [];
-                resultado.partidasLancamento.push(dados);
-                break;
-            case 'balanco_patrimonial':
-                if (!resultado.balancoPatrimonial) resultado.balancoPatrimonial = [];
-                resultado.balancoPatrimonial.push(dados);
-                break;
-            case 'demonstracao_resultado':
-                if (!resultado.demonstracaoResultado) resultado.demonstracaoResultado = [];
-                resultado.demonstracaoResultado.push(dados);
-                break;
+        try {
+            switch (dados.tipo) {
+                case 'empresa':
+                    // Validar e normalizar dados da empresa
+                    if (dados.nome || dados.cnpj) {
+                        resultado.empresa = {...resultado.empresa, ...dados};
+                    }
+                    break;
+
+                case 'documento':
+                    if (dados.indOper !== undefined) {
+                        resultado.documentos.push(dados);
+                    }
+                    break;
+
+                case 'item':
+                    if (dados.itemId || dados.descricao) {
+                        resultado.itens.push(dados);
+                    }
+                    break;
+
+                case 'item_analitico':
+                    if (!resultado.itensAnaliticos) resultado.itensAnaliticos = [];
+                    resultado.itensAnaliticos.push(dados);
+                    break;
+
+                case 'ajuste':
+                    if (!resultado.ajustes) resultado.ajustes = {};
+                    if (!resultado.ajustes[dados.categoria]) resultado.ajustes[dados.categoria] = [];
+                    resultado.ajustes[dados.categoria].push(dados);
+                    break;
+
+                case 'imposto':
+                    if (!resultado.impostos[dados.categoria]) {
+                        resultado.impostos[dados.categoria] = [];
+                    }
+                    resultado.impostos[dados.categoria].push(dados);
+                    break;
+
+                case 'debito':
+                    if (!resultado.debitos) resultado.debitos = {};
+                    if (!resultado.debitos[dados.categoria]) {
+                        resultado.debitos[dados.categoria] = [];
+                    }
+                    resultado.debitos[dados.categoria].push(dados);
+                    break;
+
+                case 'credito':
+                case 'credito_detalhe':
+                    if (!resultado.creditos[dados.categoria]) {
+                        resultado.creditos[dados.categoria] = [];
+                    }
+                    resultado.creditos[dados.categoria].push(dados);
+                    break;
+
+                case 'receita_nao_tributada':
+                    if (!resultado.receitasNaoTributadas) resultado.receitasNaoTributadas = {};
+                    if (!resultado.receitasNaoTributadas[dados.categoria]) {
+                        resultado.receitasNaoTributadas[dados.categoria] = [];
+                    }
+                    resultado.receitasNaoTributadas[dados.categoria].push(dados);
+                    break;
+
+                case 'regime':
+                    if (!resultado.regimes) resultado.regimes = {};
+                    resultado.regimes[dados.categoria] = dados;
+                    break;
+
+                case 'inventario':
+                    if (!resultado.inventario) resultado.inventario = [];
+                    resultado.inventario.push(dados);
+                    break;
+
+                case 'participante':
+                    if (!resultado.participantes) resultado.participantes = [];
+                    resultado.participantes.push(dados);
+                    break;
+
+                case 'incentivo_fiscal':
+                    if (!resultado.incentivosFiscais) resultado.incentivosFiscais = [];
+                    resultado.incentivosFiscais.push(dados);
+                    break;
+
+                case 'dre':
+                    if (!resultado.dre) resultado.dre = {};
+                    resultado.dre[dados.categoria] = dados;
+                    break;
+
+                case 'calculo_irpj':
+                    if (!resultado.calculoImposto) resultado.calculoImposto = {};
+                    resultado.calculoImposto.irpj = dados;
+                    break;
+
+                case 'calculo_csll':
+                    if (!resultado.calculoImposto) resultado.calculoImposto = {};
+                    resultado.calculoImposto.csll = dados;
+                    break;
+
+                case 'discriminacao_receita':
+                    if (!resultado.discriminacaoReceita) resultado.discriminacaoReceita = [];
+                    resultado.discriminacaoReceita.push(dados);
+                    break;
+
+                case 'lancamento_contabil':
+                    if (!resultado.lancamentosContabeis) resultado.lancamentosContabeis = [];
+                    resultado.lancamentosContabeis.push(dados);
+                    break;
+
+                case 'partida_lancamento':
+                    if (!resultado.partidasLancamento) resultado.partidasLancamento = [];
+                    resultado.partidasLancamento.push(dados);
+                    break;
+
+                case 'balanco_patrimonial':
+                    if (!resultado.balancoPatrimonial) resultado.balancoPatrimonial = [];
+                    resultado.balancoPatrimonial.push(dados);
+                    break;
+
+                case 'demonstracao_resultado':
+                    if (!resultado.demonstracaoResultado) resultado.demonstracaoResultado = [];
+                    resultado.demonstracaoResultado.push(dados);
+                    break;
+
+                default:
+                    console.warn(`Tipo de dados não reconhecido para integração: ${dados.tipo}`);
+            }
+        } catch (erro) {
+            console.error(`Erro ao integrar dados do tipo ${dados.tipo}:`, erro.message);
         }
     }
 
