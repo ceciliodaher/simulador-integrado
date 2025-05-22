@@ -59,6 +59,52 @@ function coordenarCalculos(dados) {
 }
 
 /**
+ * Detecta e integra dados do SPED nos cálculos do simulador
+ * @param {Object} dadosAninhados - Dados em estrutura aninhada
+ * @returns {Object} Dados processados com integração SPED
+ */
+function processarDadosComIntegracaoSped(dadosAninhados) {
+    // Verificar se há dados do SPED
+    if (!dadosAninhados.dadosSpedImportados) {
+        console.log('Simulação executada sem dados SPED - usando parâmetros configurados manualmente');
+        return dadosAninhados;
+    }
+
+    console.log('Simulação executada com dados SPED - priorizando dados reais extraídos');
+    
+    // Criar cópia para processamento
+    const dadosProcessados = JSON.parse(JSON.stringify(dadosAninhados));
+    const dadosSped = dadosAninhados.dadosSpedImportados.composicaoTributaria;
+
+    // Sobrescrever parâmetros fiscais com dados do SPED
+    if (!dadosProcessados.parametrosFiscais) {
+        dadosProcessados.parametrosFiscais = {};
+    }
+
+    // Priorizar débitos reais do SPED
+    dadosProcessados.parametrosFiscais.debitosReais = dadosSped.debitos;
+    dadosProcessados.parametrosFiscais.creditosReais = dadosSped.creditos;
+    dadosProcessados.parametrosFiscais.aliquotasEfetivasReais = dadosSped.aliquotasEfetivas;
+
+    // Calcular alíquota total real baseada nos dados do SPED
+    const faturamento = dadosProcessados.empresa?.faturamento || 0;
+    if (faturamento > 0 && dadosSped.totalDebitos > 0) {
+        dadosProcessados.parametrosFiscais.aliquotaEfetivaReal = dadosSped.totalDebitos / faturamento;
+        dadosProcessados.parametrosFiscais.usarAliquotaReal = true;
+    }
+
+    // Adicionar metadados para rastreamento
+    dadosProcessados.metadados = {
+        ...dadosProcessados.metadados,
+        fonteDadosTributarios: 'sped',
+        precisaoCalculos: 'alta',
+        timestampProcessamento: new Date().toISOString()
+    };
+
+    return dadosProcessados;
+}
+
+/**
  * Gera a memória de cálculo de forma centralizada
  * @param {Object} dados - Dados da simulação (formato plano)
  * @param {Object} impactoBase - Resultados do impacto base
@@ -66,12 +112,10 @@ function coordenarCalculos(dados) {
  * @returns {Object} - Memória de cálculo estruturada
  */
 function gerarMemoriaCalculo(dados, impactoBase, projecaoTemporal) {
-    // Verificar formato dos dados
     if (dados.empresa !== undefined) {
         throw new Error('Estrutura incompatível. Dados devem estar em formato plano para memória de cálculo.');
     }
     
-    // Gerar estrutura aninhada para memória de cálculo
     return {
         dadosEntrada: {
             empresa: {
@@ -99,6 +143,19 @@ function gerarMemoriaCalculo(dados, impactoBase, projecaoTemporal) {
                     ipi: typeof dados.creditosIPI === 'number' ? dados.creditosIPI : 0,
                     cbs: typeof dados.creditosCBS === 'number' ? dados.creditosCBS : 0,
                     ibs: typeof dados.creditosIBS === 'number' ? dados.creditosIBS : 0
+                },
+                // NOVA SEÇÃO: Débitos tributários
+                debitos: {
+                    pis: typeof dados.debitosPIS === 'number' ? dados.debitosPIS : 0,
+                    cofins: typeof dados.debitosCOFINS === 'number' ? dados.debitosCOFINS : 0,
+                    icms: typeof dados.debitosICMS === 'number' ? dados.debitosICMS : 0,
+                    ipi: typeof dados.debitosIPI === 'number' ? dados.debitosIPI : 0,
+                    iss: typeof dados.debitosISS === 'number' ? dados.debitosISS : 0
+                },
+                // NOVA SEÇÃO: Cronograma de transição
+                cronogramaTransicao: {
+                    2026: 0.10, 2027: 0.25, 2028: 0.40, 2029: 0.55,
+                    2030: 0.70, 2031: 0.85, 2032: 0.95, 2033: 1.00
                 }
             },
             parametrosSimulacao: {
@@ -116,8 +173,60 @@ function gerarMemoriaCalculo(dados, impactoBase, projecaoTemporal) {
         projecaoTemporal: {
             parametros: projecaoTemporal.parametros,
             impactoAcumulado: projecaoTemporal.impactoAcumulado
+        },
+        // NOVA SEÇÃO: Memória crítica com cálculos de transição
+        memoriaCritica: {
+            formula: "Impacto Transição = (Sistema Atual × % Atual) + (IVA Dual × % IVA) - Sistema Atual Original",
+            passoAPasso: [
+                "1. Calcular débitos e créditos por imposto no sistema atual",
+                "2. Calcular alíquotas efetivas por imposto",
+                "3. Determinar percentual de transição para o ano (10% em 2026 até 100% em 2033)",
+                "4. Calcular valor híbrido: (Tributos Atuais × % Sistema Atual) + (IVA Dual × % Sistema Novo)",
+                "5. Determinar impacto no capital de giro considerando a transição progressiva",
+                "6. Projetar impactos ao longo dos 8 anos de transição"
+            ],
+            observacoes: [
+                "Durante a transição, empresas pagarão ambos os sistemas simultaneamente",
+                "O percentual do sistema atual diminui gradualmente de 90% (2026) para 0% (2033)",
+                "O percentual do IVA Dual aumenta gradualmente de 10% (2026) para 100% (2033)",
+                "Cálculos baseiam-se na LC 214/2025 e regulamentação posterior",
+                "Valores podem variar conforme alterações na regulamentação"
+            ]
         }
     };
+}
+
+/**
+ * Integra dados do SPED na estrutura plana para cálculos
+ * @param {Object} dadosPlanos - Estrutura plana de dados
+ * @param {Object} dadosSpedImportados - Dados importados do SPED
+ */
+function integrarDadosSpedNaEstruturaPlana(dadosPlanos, dadosSpedImportados) {
+    const composicao = dadosSpedImportados.composicaoTributaria;
+    
+    // Adicionar débitos e créditos específicos
+    dadosPlanos.debitosPIS = composicao.debitos.pis || 0;
+    dadosPlanos.debitosCOFINS = composicao.debitos.cofins || 0;
+    dadosPlanos.debitosICMS = composicao.debitos.icms || 0;
+    dadosPlanos.debitosIPI = composicao.debitos.ipi || 0;
+    dadosPlanos.debitosISS = composicao.debitos.iss || 0;
+    
+    dadosPlanos.creditosPIS = composicao.creditos.pis || 0;
+    dadosPlanos.creditosCOFINS = composicao.creditos.cofins || 0;
+    dadosPlanos.creditosICMS = composicao.creditos.icms || 0;
+    dadosPlanos.creditosIPI = composicao.creditos.ipi || 0;
+    
+    // Sobrescrever alíquota se disponível dados reais
+    if (composicao.aliquotasEfetivas.total > 0) {
+        dadosPlanos.aliquota = composicao.aliquotasEfetivas.total / 100;
+        dadosPlanos.aliquotaOrigem = 'sped';
+    }
+    
+    // Flags de controle
+    dadosPlanos.temDadosSped = true;
+    dadosPlanos.fonteDados = 'sped';
+    
+    console.log('Dados do SPED integrados na estrutura plana para cálculos');
 }
 
 /**
@@ -355,251 +464,504 @@ const SimuladorFluxoCaixa = {
      */
     simular(dadosExternos) {
         console.log('Iniciando simulação de impacto do Split Payment...');
-        try {
-            // 1. Obter dados consolidados - do parâmetro ou do formulário
-            let dadosAninhados;
-            if (dadosExternos) {
-                dadosAninhados = dadosExternos;
-                console.log('Utilizando dados fornecidos externamente');
-            } else {
-                dadosAninhados = window.DataManager.obterDadosDoFormulario();
-                console.log('Dados obtidos do formulário');
-            }
-
-            if (!dadosAninhados) {
-                throw new Error('Não foi possível obter dados para a simulação');
-            }
-
-            // 2. Validar e normalizar os dados (formato aninhado)
-            const dadosValidados = this.validarDados(dadosAninhados);
-            console.log('Dados validados e normalizados:', dadosValidados);
-
-            // 3. Converter para estrutura plana para cálculos
-            const dadosPlanos = window.DataManager.converterParaEstruturaPlana(dadosValidados);
-            console.log('Dados convertidos para formato plano:', dadosPlanos);
-
-            // 4. Extrair dados temporais para cálculos
-            const anoInicial = parseInt(dadosPlanos.dataInicial?.split('-')[0], 10) || 2026;
-            const anoFinal = parseInt(dadosPlanos.dataFinal?.split('-')[0], 10) || 2033;
-
-            // 5. Obter parametros setoriais em formato próprio para cálculos
-            const parametrosSetoriais = {
-                aliquotaCBS: dadosValidados.ivaConfig?.cbs,
-                aliquotaIBS: dadosValidados.ivaConfig?.ibs,
-                categoriaIva: dadosValidados.ivaConfig?.categoriaIva,
-                reducaoEspecial: dadosValidados.ivaConfig?.reducaoEspecial,
-                cronogramaProprio: false // Valor padrão, ajustar conforme necessário
-            };
-
-            // 6. Calcular impacto base com tratamento de erro
-            let impactoBase;
             try {
-                impactoBase = window.IVADualSystem.calcularImpactoCapitalGiro(
-                    dadosPlanos,
-                    anoInicial,
-                    parametrosSetoriais
-                );
-                console.log('Impacto base calculado com sucesso');
-            } catch (erroImpacto) {
-                console.error('Erro ao calcular impacto base:', erroImpacto);
-                impactoBase = this.gerarImpactoBaseFallback(dadosPlanos);
-            }
-
-            // Garantir que resultadoIVASemSplit existe
-            if (!impactoBase.resultadoIVASemSplit) {
-                // Criar uma cópia do resultado atual como base
-                impactoBase.resultadoIVASemSplit = JSON.parse(JSON.stringify(impactoBase.resultadoAtual));
-                impactoBase.resultadoIVASemSplit.descricao = "Sistema IVA Dual sem Split Payment";
-
-                // Se temos resultados de impostos IVA, usar esses valores
-                if (impactoBase.resultadoSplitPayment && impactoBase.resultadoSplitPayment.impostos) {
-                    impactoBase.resultadoIVASemSplit.impostos = impactoBase.resultadoSplitPayment.impostos;
-                    impactoBase.resultadoIVASemSplit.valorImpostoTotal = 
-                        impactoBase.resultadoSplitPayment.impostos.total || 0;
-
-                    // Calcular o capital de giro para IVA sem Split
-                    impactoBase.resultadoIVASemSplit.capitalGiroDisponivel = impactoBase.resultadoAtual.capitalGiroDisponivel * 
-                        (impactoBase.resultadoSplitPayment.impostos.total / (impactoBase.resultadoAtual.impostos?.total || 1));
+                // 1. Obter dados consolidados - do parâmetro ou do formulário
+                let dadosAninhados;
+                if (dadosExternos) {
+                    dadosAninhados = dadosExternos;
+                    console.log('Utilizando dados fornecidos externamente');
+                } else {
+                    dadosAninhados = window.DataManager.obterDadosDoFormulario();
+                    console.log('Dados obtidos do formulário');
                 }
 
-                // Adicionar diferenças e percentuais específicos para IVA sem Split
-                if (!impactoBase.diferencaCapitalGiroIVASemSplit) {
-                    impactoBase.diferencaCapitalGiroIVASemSplit = 
-                        impactoBase.resultadoIVASemSplit.capitalGiroDisponivel - 
-                        impactoBase.resultadoAtual.capitalGiroDisponivel;
+                if (!dadosAninhados) {
+                    throw new Error('Não foi possível obter dados para a simulação');
                 }
 
-                if (!impactoBase.percentualImpactoIVASemSplit) {
-                    impactoBase.percentualImpactoIVASemSplit = 
-                        impactoBase.resultadoAtual.capitalGiroDisponivel !== 0 ? 
-                        (impactoBase.diferencaCapitalGiroIVASemSplit / impactoBase.resultadoAtual.capitalGiroDisponivel) * 100 : 0;
+                // 1.5. NOVA ETAPA: Processar integração com dados SPED
+                dadosAninhados = processarDadosComIntegracaoSped(dadosAninhados);
+
+                // 2. Validar e normalizar os dados (formato aninhado)
+                const dadosValidados = this.validarDados(dadosAninhados);
+                console.log('Dados validados e normalizados:', dadosValidados);
+
+                // 3. Converter para estrutura plana para cálculos
+                const dadosPlanos = window.DataManager.converterParaEstruturaPlana(dadosValidados);
+                console.log('Dados convertidos para formato plano:', dadosPlanos);
+
+                // 3.5. NOVA ETAPA: Adicionar dados SPED à estrutura plana
+                if (dadosValidados.dadosSpedImportados) {
+                    integrarDadosSpedNaEstruturaPlana(dadosPlanos, dadosValidados.dadosSpedImportados);
                 }
 
-                // Calcular a necessidade adicional de capital de giro para IVA sem Split
-                if (!impactoBase.necessidadeAdicionalCapitalGiroIVASemSplit) {
-                    impactoBase.necessidadeAdicionalCapitalGiroIVASemSplit = 
-                        Math.abs(impactoBase.diferencaCapitalGiroIVASemSplit) * 1.2;
-                }
-            }
+                // 4. Extrair dados temporais para cálculos
+                const anoInicial = parseInt(dadosPlanos.dataInicial?.split('-')[0], 10) || 2026;
+                const anoFinal = parseInt(dadosPlanos.dataFinal?.split('-')[0], 10) || 2033;
 
-            // 7. Calcular projeção temporal com fallback
-            let projecaoTemporal;
-            try {
-                projecaoTemporal = window.IVADualSystem.calcularProjecaoTemporal(
-                    dadosPlanos,
-                    anoInicial,
-                    anoFinal,
-                    dadosPlanos.cenario,
-                    dadosPlanos.taxaCrescimento,
-                    parametrosSetoriais
-                );
-                console.log('Projeção temporal calculada com sucesso');
-            } catch (erroProjecao) {
-                console.error('Erro ao calcular projeção temporal:', erroProjecao);
-                projecaoTemporal = {
-                    parametros: {
+                // 5. Obter parametros setoriais em formato próprio para cálculos
+                const parametrosSetoriais = {
+                    aliquotaCBS: dadosValidados.ivaConfig?.cbs || 0.088,
+                    aliquotaIBS: dadosValidados.ivaConfig?.ibs || 0.177,
+                    categoriaIva: dadosValidados.ivaConfig?.categoriaIva || 'standard',
+                    reducaoEspecial: dadosValidados.ivaConfig?.reducaoEspecial || 0,
+                    cronogramaProprio: false
+                };
+
+                // 6. Calcular impacto base com tratamento de erro robusto
+                let impactoBase;
+                try {
+                    impactoBase = window.IVADualSystem.calcularImpactoCapitalGiro(
+                        dadosPlanos,
+                        anoInicial,
+                        parametrosSetoriais
+                    );
+                    console.log('Impacto base calculado com sucesso');
+
+                    // Validar estrutura do impacto base
+                    this._validarImpactoBase(impactoBase);
+
+                } catch (erroImpacto) {
+                    console.error('Erro ao calcular impacto base:', erroImpacto);
+                    impactoBase = this.gerarImpactoBaseFallback(dadosPlanos);
+                    console.log('Usando impacto base de fallback');
+                }
+
+                // 7. Garantir que resultadoIVASemSplit existe e está completo
+                impactoBase = this._garantirResultadoIVASemSplit(impactoBase);
+
+                // 8. Calcular projeção temporal com fallback robusto
+                let projecaoTemporal;
+                try {
+                    projecaoTemporal = window.IVADualSystem.calcularProjecaoTemporal(
+                        dadosPlanos,
                         anoInicial,
                         anoFinal,
-                        cenarioTaxaCrescimento: dadosPlanos.cenario || 'moderado',
-                        taxaCrescimento: dadosPlanos.taxaCrescimento || 0.05
-                    },
-                    impactoAcumulado: {
-                        totalNecessidadeCapitalGiro:
-                            (impactoBase.necessidadeAdicionalCapitalGiro || 0) *
-                            (anoFinal - anoInicial + 1),
-                        custoFinanceiroTotal:
-                            (impactoBase.necessidadeAdicionalCapitalGiro || 0) *
-                            (dadosPlanos.taxaCapitalGiro || 0.021) *
-                            12 *
-                            (anoFinal - anoInicial + 1),
-                        impactoMedioMargem: impactoBase.impactoMargem || 0
-                    },
-                    resultadosAnuais: {}, // Objeto vazio para evitar erros de acesso
-                    comparacaoRegimes: {  // Estrutura mínima para evitar erros no chartManager
-                        anos: [anoInicial, anoFinal],
-                        atual: { capitalGiro: [impactoBase.resultadoAtual?.capitalGiroDisponivel || 0, 0], impostos: [0, 0] },
-                        splitPayment: { capitalGiro: [impactoBase.resultadoSplitPayment?.capitalGiroDisponivel || 0, 0], impostos: [0, 0] },
-                        ivaSemSplit: { capitalGiro: [impactoBase.resultadoIVASemSplit?.capitalGiroDisponivel || 0, 0], impostos: [0, 0] },
-                        impacto: { 
-                            diferencaCapitalGiro: [impactoBase.diferencaCapitalGiro || 0, 0], 
-                            percentualImpacto: [impactoBase.percentualImpacto || 0, 0], 
-                            necessidadeAdicional: [impactoBase.necessidadeAdicionalCapitalGiro || 0, 0] 
-                        }
-                    }
-                };
-            }
+                        dadosPlanos.cenario,
+                        dadosPlanos.taxaCrescimento,
+                        parametrosSetoriais
+                    );
+                    console.log('Projeção temporal calculada com sucesso');
 
-            // Garantir que a projeção temporal possui informações para IVA sem Split
-            if (projecaoTemporal.resultadosAnuais) {
-                Object.keys(projecaoTemporal.resultadosAnuais).forEach(ano => {
-                    const resultadoAno = projecaoTemporal.resultadosAnuais[ano];
+                    // Validar e completar projeção temporal
+                    projecaoTemporal = this._validarECompletarProjecaoTemporal(projecaoTemporal, impactoBase, anoInicial, anoFinal);
 
-                    if (!resultadoAno.resultadoIVASemSplit) {
-                        resultadoAno.resultadoIVASemSplit = JSON.parse(JSON.stringify(resultadoAno.resultadoAtual));
-                        resultadoAno.resultadoIVASemSplit.descricao = "Sistema IVA Dual sem Split Payment";
+                } catch (erroProjecao) {
+                    console.error('Erro ao calcular projeção temporal:', erroProjecao);
+                    projecaoTemporal = this._gerarProjecaoTemporalFallback(impactoBase, dadosPlanos, anoInicial, anoFinal);
+                }
 
-                        if (resultadoAno.resultadoSplitPayment && resultadoAno.resultadoSplitPayment.impostos) {
-                            resultadoAno.resultadoIVASemSplit.impostos = resultadoAno.resultadoSplitPayment.impostos;
-                            resultadoAno.resultadoIVASemSplit.valorImpostoTotal = 
-                                resultadoAno.resultadoSplitPayment.impostos.total || 0;
+                // 9. Calcular análise de elasticidade
+                let analiseElasticidade;
+                try {
+                    analiseElasticidade = window.CalculationCore.calcularAnaliseElasticidade(
+                        dadosPlanos,
+                        anoInicial,
+                        anoFinal
+                    );
+                    // Adicionar à projeção temporal
+                    projecaoTemporal.analiseElasticidade = analiseElasticidade;
+                } catch (erroElasticidade) {
+                    console.error('Erro ao calcular análise de elasticidade:', erroElasticidade);
+                    // Não interrompe o fluxo se falhar
+                }
 
-                            // Calcular o capital de giro para IVA sem Split
-                            resultadoAno.resultadoIVASemSplit.capitalGiroDisponivel = resultadoAno.resultadoAtual.capitalGiroDisponivel * 
-                                (resultadoAno.resultadoSplitPayment.impostos.total / (resultadoAno.resultadoAtual.impostos?.total || 1));
-                        }
-                    }
+                // 10. Gerar memória de cálculo
+                let memoriaCalculo;
+                try {
+                    memoriaCalculo = gerarMemoriaCalculo(
+                        dadosPlanos,
+                        impactoBase,
+                        projecaoTemporal
+                    );
+                } catch (erroMemoria) {
+                    console.error('Erro ao gerar memória de cálculo:', erroMemoria);
+                    memoriaCalculo = this._gerarMemoriaCalculoFallback(dadosPlanos, impactoBase, projecaoTemporal);
+                }
 
-                    if (!resultadoAno.diferencaCapitalGiroIVASemSplit) {
-                        resultadoAno.diferencaCapitalGiroIVASemSplit = 
-                            (resultadoAno.resultadoIVASemSplit.capitalGiroDisponivel || 0) - 
-                            (resultadoAno.resultadoAtual.capitalGiroDisponivel || 0);
+                // 11. Armazenar resultados intermediários para referência
+                _resultadoAtual = impactoBase.resultadoAtual || null;
+                _resultadoSplitPayment = impactoBase.resultadoSplitPayment || null;
 
-                        resultadoAno.percentualImpactoIVASemSplit = 
-                            resultadoAno.resultadoAtual.capitalGiroDisponivel !== 0 ? 
-                            (resultadoAno.diferencaCapitalGiroIVASemSplit / resultadoAno.resultadoAtual.capitalGiroDisponivel) * 100 : 0;
-
-                        // Calcular a necessidade adicional de capital de giro para IVA sem Split
-                        resultadoAno.necessidadeAdicionalCapitalGiroIVASemSplit = 
-                            Math.abs(resultadoAno.diferencaCapitalGiroIVASemSplit) * 1.2;
-                    }
-                });
-            }
-
-            // 8. Calcular análise de elasticidade
-            let analiseElasticidade;
-            try {
-                analiseElasticidade = window.CalculationCore.calcularAnaliseElasticidade(
-                    dadosPlanos,
-                    anoInicial,
-                    anoFinal
-                );
-                // Adicionar à projeção temporal
-                projecaoTemporal.analiseElasticidade = analiseElasticidade;
-            } catch (erroElasticidade) {
-                console.error('Erro ao calcular análise de elasticidade:', erroElasticidade);
-                // Não interrompe o fluxo se falhar
-            }
-
-            // 9. Gerar memória de cálculo
-            let memoriaCalculo;
-            try {
-                memoriaCalculo = gerarMemoriaCalculo(
-                    dadosPlanos,
+                // 12. Construir objeto de resultado para interface (formato aninhado)
+                const resultadosParaInterface = {
                     impactoBase,
-                    projecaoTemporal
-                );
-            } catch (erroMemoria) {
-                console.error('Erro ao gerar memória de cálculo:', erroMemoria);
-                memoriaCalculo = {
-                    dadosEntrada: window.DataManager.converterParaEstruturaAninhada(dadosPlanos),
-                    impactoBase: {
-                        diferencaCapitalGiro: impactoBase.diferencaCapitalGiro,
-                        diferencaCapitalGiroIVASemSplit: impactoBase.diferencaCapitalGiroIVASemSplit,
-                        percentualImpacto: impactoBase.percentualImpacto,
-                        percentualImpactoIVASemSplit: impactoBase.percentualImpactoIVASemSplit
-                    },
-                    projecaoTemporal: {
-                        parametros: projecaoTemporal.parametros
-                    }
+                    projecaoTemporal,
+                    memoriaCalculo,
+                    dadosUtilizados: dadosValidados,
+                    // Garantir estrutura de exportação
+                    resultadosExportacao: this._gerarEstruturaExportacao(impactoBase, projecaoTemporal)
                 };
+
+                console.log('Simulação concluída com sucesso');
+
+                // 13. Atualizar interface e gráficos (se disponíveis)
+                if (typeof window.atualizarInterface === 'function') {
+                    window.atualizarInterface(resultadosParaInterface);
+                } else {
+                    console.warn('Função atualizarInterface não encontrada. A interface não será atualizada automaticamente.');
+                }
+
+                if (
+                    typeof window.ChartManager !== 'undefined' &&
+                    typeof window.ChartManager.renderizarGraficos === 'function'
+                ) {
+                    window.ChartManager.renderizarGraficos(resultadosParaInterface);
+                } else {
+                    console.warn('ChartManager não encontrado ou função renderizarGraficos indisponível.');
+                }
+
+                return resultadosParaInterface;
+            } catch (erro) {
+                console.error('Erro crítico durante a simulação:', erro);
+                alert('Ocorreu um erro durante a simulação: ' + erro.message);
+                return null;
             }
+        },
 
-            // 10. Armazenar resultados intermediários para referência
-            _resultadoAtual = impactoBase.resultadoAtual || null;
-            _resultadoSplitPayment = impactoBase.resultadoSplitPayment || null;
+    /**
+     * Valida a estrutura do impacto base
+     * @private
+     * @param {Object} impactoBase - Impacto base calculado
+     * @throws {Error} Se a estrutura for inválida
+     */
+    _validarImpactoBase(impactoBase) {
+        if (!impactoBase) {
+            throw new Error('Impacto base não foi calculado');
+        }
 
-            // 11. Construir objeto de resultado para interface (formato aninhado)
-            const resultadosParaInterface = {
-                impactoBase,
-                projecaoTemporal,
-                memoriaCalculo,
-                dadosUtilizados: dadosValidados
+        const camposObrigatorios = ['diferencaCapitalGiro', 'percentualImpacto', 'resultadoAtual', 'resultadoSplitPayment'];
+
+        camposObrigatorios.forEach(campo => {
+            if (impactoBase[campo] === undefined) {
+                throw new Error(`Campo obrigatório ausente no impacto base: ${campo}`);
+            }
+        });
+
+        // Validar estruturas de resultado
+        if (!impactoBase.resultadoAtual.capitalGiroDisponivel && impactoBase.resultadoAtual.capitalGiroDisponivel !== 0) {
+            throw new Error('Capital de giro atual não calculado');
+        }
+
+        if (!impactoBase.resultadoSplitPayment.capitalGiroDisponivel && impactoBase.resultadoSplitPayment.capitalGiroDisponivel !== 0) {
+            throw new Error('Capital de giro Split Payment não calculado');
+        }
+    },
+
+    /**
+     * Garante que o resultado IVA sem Split existe e está completo
+     * @private
+     * @param {Object} impactoBase - Impacto base
+     * @returns {Object} Impacto base com resultado IVA sem Split garantido
+     */
+    _garantirResultadoIVASemSplit(impactoBase) {
+        if (!impactoBase.resultadoIVASemSplit) {
+            // Criar uma cópia do resultado atual como base
+            impactoBase.resultadoIVASemSplit = {
+                ...JSON.parse(JSON.stringify(impactoBase.resultadoAtual)),
+                descricao: "Sistema IVA Dual sem Split Payment"
             };
 
-            console.log('Simulação concluída com sucesso');
+            // Se temos resultados de impostos IVA, usar esses valores
+            if (impactoBase.resultadoSplitPayment?.impostos) {
+                impactoBase.resultadoIVASemSplit.impostos = { ...impactoBase.resultadoSplitPayment.impostos };
+                impactoBase.resultadoIVASemSplit.valorImpostoTotal = impactoBase.resultadoSplitPayment.impostos.total || 0;
 
-            // 12. Atualizar interface e gráficos (se disponíveis)
-            if (typeof window.atualizarInterface === 'function') {
-                window.atualizarInterface(resultadosParaInterface);
-            } else {
-                console.warn('Função atualizarInterface não encontrada. A interface não será atualizada automaticamente.');
+                // Calcular o capital de giro para IVA sem Split
+                const fatorImposto = impactoBase.resultadoSplitPayment.impostos.total / (impactoBase.resultadoAtual.impostos?.total || 1);
+                impactoBase.resultadoIVASemSplit.capitalGiroDisponivel = impactoBase.resultadoAtual.capitalGiroDisponivel * fatorImposto;
             }
+        }
 
-            if (
-                typeof window.ChartManager !== 'undefined' &&
-                typeof window.ChartManager.renderizarGraficos === 'function'
-            ) {
-                window.ChartManager.renderizarGraficos(resultadosParaInterface);
+        // Garantir campos de diferença
+        if (!impactoBase.diferencaCapitalGiroIVASemSplit) {
+            impactoBase.diferencaCapitalGiroIVASemSplit = 
+                (impactoBase.resultadoIVASemSplit.capitalGiroDisponivel || 0) - 
+                (impactoBase.resultadoAtual.capitalGiroDisponivel || 0);
+        }
+
+        if (!impactoBase.percentualImpactoIVASemSplit) {
+            impactoBase.percentualImpactoIVASemSplit = 
+                impactoBase.resultadoAtual.capitalGiroDisponivel !== 0 ? 
+                (impactoBase.diferencaCapitalGiroIVASemSplit / impactoBase.resultadoAtual.capitalGiroDisponivel) * 100 : 0;
+        }
+
+        if (!impactoBase.necessidadeAdicionalCapitalGiroIVASemSplit) {
+            impactoBase.necessidadeAdicionalCapitalGiroIVASemSplit = 
+                Math.abs(impactoBase.diferencaCapitalGiroIVASemSplit) * 1.2;
+        }
+
+        return impactoBase;
+    },
+
+    /**
+     * Valida e completa a projeção temporal
+     * @private
+     * @param {Object} projecaoTemporal - Projeção temporal calculada
+     * @param {Object} impactoBase - Impacto base
+     * @param {number} anoInicial - Ano inicial
+     * @param {number} anoFinal - Ano final
+     * @returns {Object} Projeção temporal validada e completa
+     */
+    _validarECompletarProjecaoTemporal(projecaoTemporal, impactoBase, anoInicial, anoFinal) {
+        // Garantir que existe resultadosAnuais
+        if (!projecaoTemporal.resultadosAnuais) {
+            projecaoTemporal.resultadosAnuais = {};
+        }
+
+        // Garantir que todos os anos têm dados
+        for (let ano = anoInicial; ano <= anoFinal; ano++) {
+            if (!projecaoTemporal.resultadosAnuais[ano]) {
+                projecaoTemporal.resultadosAnuais[ano] = this._gerarDadosAnoFallback(impactoBase, ano, anoInicial);
             } else {
-                console.warn('ChartManager não encontrado ou função renderizarGraficos indisponível.');
-            }
+                // Garantir que cada ano tem resultado IVA sem Split
+                const resultadoAno = projecaoTemporal.resultadosAnuais[ano];
+                if (!resultadoAno.resultadoIVASemSplit) {
+                    resultadoAno.resultadoIVASemSplit = {
+                        ...JSON.parse(JSON.stringify(resultadoAno.resultadoAtual)),
+                        descricao: "Sistema IVA Dual sem Split Payment"
+                    };
 
-            return resultadosParaInterface;
-        } catch (erro) {
-            console.error('Erro crítico durante a simulação:', erro);
-            alert('Ocorreu um erro durante a simulação: ' + erro.message);
+                    if (resultadoAno.resultadoSplitPayment?.impostos) {
+                        resultadoAno.resultadoIVASemSplit.impostos = { ...resultadoAno.resultadoSplitPayment.impostos };
+                        resultadoAno.resultadoIVASemSplit.valorImpostoTotal = resultadoAno.resultadoSplitPayment.impostos.total || 0;
+
+                        const fatorImposto = resultadoAno.resultadoSplitPayment.impostos.total / (resultadoAno.resultadoAtual.impostos?.total || 1);
+                        resultadoAno.resultadoIVASemSplit.capitalGiroDisponivel = resultadoAno.resultadoAtual.capitalGiroDisponivel * fatorImposto;
+                    }
+
+                    // Calcular diferenças
+                    resultadoAno.diferencaCapitalGiroIVASemSplit = 
+                        (resultadoAno.resultadoIVASemSplit.capitalGiroDisponivel || 0) - 
+                        (resultadoAno.resultadoAtual.capitalGiroDisponivel || 0);
+
+                    resultadoAno.percentualImpactoIVASemSplit = 
+                        resultadoAno.resultadoAtual.capitalGiroDisponivel !== 0 ? 
+                        (resultadoAno.diferencaCapitalGiroIVASemSplit / resultadoAno.resultadoAtual.capitalGiroDisponivel) * 100 : 0;
+
+                    resultadoAno.necessidadeAdicionalCapitalGiroIVASemSplit = 
+                        Math.abs(resultadoAno.diferencaCapitalGiroIVASemSplit) * 1.2;
+                }
+            }
+        }
+
+        // Garantir impactoAcumulado
+        if (!projecaoTemporal.impactoAcumulado) {
+            projecaoTemporal.impactoAcumulado = this._calcularImpactoAcumulado(projecaoTemporal.resultadosAnuais);
+        }
+
+        return projecaoTemporal;
+    },
+
+    /**
+     * Gera dados de ano como fallback
+     * @private
+     * @param {Object} impactoBase - Impacto base
+     * @param {number} ano - Ano
+     * @param {number} anoInicial - Ano inicial
+     * @returns {Object} Dados do ano
+     */
+    _gerarDadosAnoFallback(impactoBase, ano, anoInicial) {
+        const fatorTempo = Math.pow(1.05, ano - anoInicial); // 5% de crescimento padrão
+
+        return {
+            resultadoAtual: {
+                ...impactoBase.resultadoAtual,
+                capitalGiroDisponivel: (impactoBase.resultadoAtual.capitalGiroDisponivel || 0) * fatorTempo,
+                impostos: impactoBase.resultadoAtual.impostos ? 
+                    { ...impactoBase.resultadoAtual.impostos, total: (impactoBase.resultadoAtual.impostos.total || 0) * fatorTempo } : 
+                    { total: 0 }
+            },
+            resultadoSplitPayment: {
+                ...impactoBase.resultadoSplitPayment,
+                capitalGiroDisponivel: (impactoBase.resultadoSplitPayment.capitalGiroDisponivel || 0) * fatorTempo,
+                impostos: impactoBase.resultadoSplitPayment.impostos ? 
+                    { ...impactoBase.resultadoSplitPayment.impostos, total: (impactoBase.resultadoSplitPayment.impostos.total || 0) * fatorTempo } : 
+                    { total: 0 }
+            },
+            resultadoIVASemSplit: {
+                ...impactoBase.resultadoIVASemSplit,
+                capitalGiroDisponivel: (impactoBase.resultadoIVASemSplit.capitalGiroDisponivel || 0) * fatorTempo,
+                impostos: impactoBase.resultadoIVASemSplit.impostos ? 
+                    { ...impactoBase.resultadoIVASemSplit.impostos, total: (impactoBase.resultadoIVASemSplit.impostos.total || 0) * fatorTempo } : 
+                    { total: 0 }
+            },
+            diferencaCapitalGiro: (impactoBase.diferencaCapitalGiro || 0) * fatorTempo,
+            diferencaCapitalGiroIVASemSplit: (impactoBase.diferencaCapitalGiroIVASemSplit || 0) * fatorTempo,
+            percentualImpacto: impactoBase.percentualImpacto || 0,
+            percentualImpactoIVASemSplit: impactoBase.percentualImpactoIVASemSplit || 0,
+            impactoDiasFaturamento: impactoBase.impactoDiasFaturamento || 0,
+            necessidadeAdicionalCapitalGiro: (impactoBase.necessidadeAdicionalCapitalGiro || 0) * fatorTempo,
+            necessidadeAdicionalCapitalGiroIVASemSplit: (impactoBase.necessidadeAdicionalCapitalGiroIVASemSplit || 0) * fatorTempo
+        };
+    },
+
+    /**
+     * Calcula o impacto acumulado
+     * @private
+     * @param {Object} resultadosAnuais - Resultados anuais
+     * @returns {Object} Impacto acumulado
+     */
+    _calcularImpactoAcumulado(resultadosAnuais) {
+        const anos = Object.keys(resultadosAnuais);
+
+        const totalNecessidadeCapitalGiro = anos.reduce((acc, ano) => {
+            return acc + (resultadosAnuais[ano].necessidadeAdicionalCapitalGiro || 0);
+        }, 0);
+
+        const custoFinanceiroTotal = totalNecessidadeCapitalGiro * 0.021 * 12; // Taxa padrão 2,1% a.m.
+
+        return {
+            totalNecessidadeCapitalGiro,
+            custoFinanceiroTotal,
+            impactoMedioMargem: anos.reduce((acc, ano) => {
+                return acc + (resultadosAnuais[ano].impactoMargem || 0);
+            }, 0) / anos.length
+        };
+    },
+
+    /**
+     * Gera estrutura de exportação
+     * @private
+     * @param {Object} impactoBase - Impacto base
+     * @param {Object} projecaoTemporal - Projeção temporal
+     * @returns {Object} Estrutura de exportação
+     */
+    _gerarEstruturaExportacao(impactoBase, projecaoTemporal) {
+        if (!projecaoTemporal.resultadosAnuais) {
             return null;
         }
+
+        const anos = Object.keys(projecaoTemporal.resultadosAnuais).sort();
+        const resultadosPorAno = {};
+
+        anos.forEach(ano => {
+            const dadosAno = projecaoTemporal.resultadosAnuais[ano];
+            resultadosPorAno[ano] = {
+                capitalGiroSplitPayment: dadosAno.resultadoSplitPayment?.capitalGiroDisponivel || 0,
+                capitalGiroAtual: dadosAno.resultadoAtual?.capitalGiroDisponivel || 0,
+                capitalGiroIVASemSplit: dadosAno.resultadoIVASemSplit?.capitalGiroDisponivel || 0,
+                diferenca: dadosAno.diferencaCapitalGiro || 0,
+                diferencaIVASemSplit: dadosAno.diferencaCapitalGiroIVASemSplit || 0,
+                percentualImpacto: dadosAno.percentualImpacto || 0,
+                impostoDevido: dadosAno.resultadoSplitPayment?.impostos?.total || 0,
+                sistemaAtual: dadosAno.resultadoAtual?.impostos?.total || 0,
+                ivaSemsplit: dadosAno.resultadoIVASemSplit?.impostos?.total || 0
+            };
+        });
+
+        return {
+            anos: anos,
+            resultadosPorAno: resultadosPorAno,
+            resumo: {
+                variacaoTotal: Object.values(resultadosPorAno).reduce((acc, ano) => acc + ano.diferenca, 0),
+                variacaoTotalIVASemSplit: Object.values(resultadosPorAno).reduce((acc, ano) => acc + ano.diferencaIVASemSplit, 0),
+                tendenciaGeral: Object.values(resultadosPorAno).reduce((acc, ano) => acc + ano.diferenca, 0) > 0 ? "aumento" : "redução"
+            }
+        };
+    },
+
+    /**
+     * Gera projeção temporal de fallback
+     * @private
+     * @param {Object} impactoBase - Impacto base
+     * @param {Object} dadosPlanos - Dados planos
+     * @param {number} anoInicial - Ano inicial
+     * @param {number} anoFinal - Ano final
+     * @returns {Object} Projeção temporal de fallback
+     */
+    _gerarProjecaoTemporalFallback(impactoBase, dadosPlanos, anoInicial, anoFinal) {
+        const resultadosAnuais = {};
+
+        for (let ano = anoInicial; ano <= anoFinal; ano++) {
+            resultadosAnuais[ano] = this._gerarDadosAnoFallback(impactoBase, ano, anoInicial);
+        }
+
+        return {
+            parametros: {
+                anoInicial,
+                anoFinal,
+                cenarioTaxaCrescimento: dadosPlanos.cenario || 'moderado',
+                taxaCrescimento: dadosPlanos.taxaCrescimento || 0.05
+            },
+            resultadosAnuais,
+            impactoAcumulado: this._calcularImpactoAcumulado(resultadosAnuais),
+            comparacaoRegimes: this._gerarComparacaoRegimes(resultadosAnuais, anoInicial, anoFinal)
+        };
+    },
+
+    /**
+     * Gera comparação de regimes
+     * @private
+     * @param {Object} resultadosAnuais - Resultados anuais
+     * @param {number} anoInicial - Ano inicial
+     * @param {number} anoFinal - Ano final
+     * @returns {Object} Comparação de regimes
+     */
+    _gerarComparacaoRegimes(resultadosAnuais, anoInicial, anoFinal) {
+        const anos = Object.keys(resultadosAnuais).sort().map(Number);
+
+        return {
+            anos,
+            atual: {
+                capitalGiro: anos.map(ano => resultadosAnuais[ano].resultadoAtual.capitalGiroDisponivel || 0),
+                impostos: anos.map(ano => resultadosAnuais[ano].resultadoAtual.impostos?.total || 0)
+            },
+            splitPayment: {
+                capitalGiro: anos.map(ano => resultadosAnuais[ano].resultadoSplitPayment.capitalGiroDisponivel || 0),
+                impostos: anos.map(ano => resultadosAnuais[ano].resultadoSplitPayment.impostos?.total || 0)
+            },
+            ivaSemSplit: {
+                capitalGiro: anos.map(ano => resultadosAnuais[ano].resultadoIVASemSplit.capitalGiroDisponivel || 0),
+                impostos: anos.map(ano => resultadosAnuais[ano].resultadoIVASemSplit.impostos?.total || 0)
+            },
+            impacto: {
+                diferencaCapitalGiro: anos.map(ano => resultadosAnuais[ano].diferencaCapitalGiro || 0),
+                percentualImpacto: anos.map(ano => resultadosAnuais[ano].percentualImpacto || 0),
+                necessidadeAdicional: anos.map(ano => resultadosAnuais[ano].necessidadeAdicionalCapitalGiro || 0)
+            }
+        };
+    },
+
+    /**
+     * Gera memória de cálculo de fallback
+     * @private
+     * @param {Object} dadosPlanos - Dados planos
+     * @param {Object} impactoBase - Impacto base
+     * @param {Object} projecaoTemporal - Projeção temporal
+     * @returns {Object} Memória de cálculo
+     */
+    _gerarMemoriaCalculoFallback(dadosPlanos, impactoBase, projecaoTemporal) {
+        return {
+            dadosEntrada: window.DataManager.converterParaEstruturaAninhada(dadosPlanos),
+            impactoBase: {
+                diferencaCapitalGiro: impactoBase.diferencaCapitalGiro || 0,
+                diferencaCapitalGiroIVASemSplit: impactoBase.diferencaCapitalGiroIVASemSplit || 0,
+                percentualImpacto: impactoBase.percentualImpacto || 0,
+                percentualImpactoIVASemSplit: impactoBase.percentualImpactoIVASemSplit || 0
+            },
+            projecaoTemporal: {
+                parametros: projecaoTemporal.parametros,
+                impactoAcumulado: projecaoTemporal.impactoAcumulado
+            },
+            memoriaCritica: {
+                formula: "Impacto = (Capital Giro Split Payment - Capital Giro Atual) / Capital Giro Atual",
+                passoAPasso: [
+                    "1. Calcular capital de giro necessário no sistema atual",
+                    "2. Calcular capital de giro necessário com Split Payment",
+                    "3. Calcular capital de giro necessário com IVA sem Split Payment",
+                    "4. Determinar diferenças entre os sistemas",
+                    "5. Calcular percentuais de impacto",
+                    "6. Projetar impactos ao longo do tempo"
+                ],
+                observacoes: [
+                    "Cálculos baseados em dados fornecidos pelo usuário",
+                    "Projeção considera cenário de crescimento selecionado",
+                    "Valores podem variar conforme alterações na regulamentação",
+                    "Memória de cálculo simplificada devido a limitações nos dados de entrada"
+                ]
+            }
+        };
     },
     
     /**
