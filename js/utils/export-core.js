@@ -171,20 +171,7 @@ class ExportManager {
             return Promise.reject(new Error(`No exporter registered for type: ${type}`));
         }
 
-        // Validar dados antes da exportação
-        if (!this.validateSimulationData(data)) {
-            return Promise.reject(new Error('Invalid simulation data for export'));
-        }
-
-        // Normalizar dados para estrutura aninhada
-        let normalizedData;
-        try {
-            normalizedData = this.normalizeDataForExport(data);
-        } catch (error) {
-            return Promise.reject(new Error(`Data normalization failed: ${error.message}`));
-        }
-
-        return exporter.export(normalizedData, options);
+        return exporter.export(data, options);
     }
 
     /**
@@ -223,23 +210,6 @@ class ExportManager {
 
         return `${dia}/${mes}/${ano}`;
     }
-    
-    /**
-     * Format date using DataManager if available
-     * @param {Date|string} date - Date to format
-     * @param {string} format - Format string (optional)
-     * @returns {string} Formatted date
-     */
-    formatDateWithDataManager(date, format = 'dd/MM/yyyy HH:mm') {
-        // Usar DataManager se disponível
-        if (typeof window.DataManager !== 'undefined' && 
-            typeof window.DataManager.formatarData === 'function') {
-            return window.DataManager.formatarData(date, format);
-        }
-
-        // Fallback para método existente
-        return this.formatDate(date, format);
-    }
 
     /**
      * Format currency value
@@ -247,13 +217,6 @@ class ExportManager {
      * @returns {string} Formatted currency
      */
     formatCurrency(value) {
-        // Priorizar o DataManager se disponível
-        if (typeof window.DataManager !== 'undefined' && 
-            typeof window.DataManager.formatarMoeda === 'function') {
-            return window.DataManager.formatarMoeda(value);
-        }
-
-        // Fallback para formatação local
         if (isNaN(value) || value === undefined || value === null) {
             return "R$ 0,00";
         }
@@ -266,19 +229,10 @@ class ExportManager {
 
     /**
      * Format percentage value
-     * @param {number} value - Value to format (should be in decimal format: 0.05 for 5%)
+     * @param {number} value - Value to format
      * @returns {string} Formatted percentage
      */
     formatPercentage(value) {
-        // Priorizar o DataManager se disponível
-        if (typeof window.DataManager !== 'undefined' && 
-            typeof window.DataManager.formatarPercentual === 'function') {
-            // DataManager espera valor já em percentual (5 para 5%)
-            const percentualValue = typeof value === 'number' ? value : 0;
-            return window.DataManager.formatarPercentual(percentualValue);
-        }
-
-        // Fallback para formatação local
         if (value === undefined || value === null || isNaN(parseFloat(value))) {
             return "0,00%";
         }
@@ -342,7 +296,7 @@ class ExportManager {
     }
 
     /**
-     * Validate simulation data using DataManager
+     * Validate simulation data
      * @param {Object} simulation - Simulation data
      * @returns {boolean} True if valid
      */
@@ -352,127 +306,17 @@ class ExportManager {
             return false;
         }
 
-        // Usar DataManager para validação se disponível
-        if (typeof window.DataManager !== 'undefined') {
-            try {
-                // Detectar tipo de estrutura
-                const tipoEstrutura = window.DataManager.detectarTipoEstrutura(simulation);
-
-                if (!tipoEstrutura) {
-                    console.error('Unable to determine data structure type');
-                    return false;
-                }
-
-                // Validar estrutura aninhada (canônica para exportação)
-                let dadosValidados;
-                if (tipoEstrutura === 'plana') {
-                    // Converter para estrutura aninhada
-                    dadosValidados = window.DataManager.converterParaEstruturaAninhada(simulation);
-                } else {
-                    dadosValidados = simulation;
-                }
-
-                // Validar e normalizar
-                window.DataManager.validarENormalizar(dadosValidados);
-
-                return true;
-            } catch (error) {
-                console.error('Data validation failed:', error.message);
-                return false;
-            }
-        }
-
-        // Fallback para validação básica
-        if (!simulation.dados && !simulation.empresa) {
+        if (!simulation.dados) {
             console.error('Simulation data is missing');
             return false;
         }
 
-        if (!simulation.resultados && !simulation.impactoBase) {
+        if (!simulation.resultados) {
             console.error('Simulation results are missing');
             return false;
         }
 
         return true;
-    }
-    
-    /**
-     * Normalize simulation data for export (ensure nested structure)
-     * @param {Object} simulation - Simulation data in any format
-     * @returns {Object} Normalized simulation data in nested format
-     */
-    normalizeDataForExport(simulation) {
-        if (!simulation) {
-            throw new Error('Simulation data is required');
-        }
-
-        // Usar DataManager para normalização se disponível
-        if (typeof window.DataManager !== 'undefined') {
-            try {
-                // Detectar tipo de estrutura
-                const tipoEstrutura = window.DataManager.detectarTipoEstrutura(simulation);
-
-                let dadosNormalizados;
-
-                if (tipoEstrutura === 'plana') {
-                    // Converter para estrutura aninhada
-                    dadosNormalizados = window.DataManager.converterParaEstruturaAninhada(simulation);
-                } else if (tipoEstrutura === 'aninhada') {
-                    // Já está no formato correto, apenas validar
-                    dadosNormalizados = simulation;
-                } else {
-                    // Estrutura desconhecida, tentar criar estrutura básica
-                    dadosNormalizados = window.DataManager.obterEstruturaAninhadaPadrao();
-
-                    // Copiar dados disponíveis
-                    if (simulation.faturamento !== undefined) {
-                        dadosNormalizados.empresa.faturamento = simulation.faturamento;
-                    }
-                    if (simulation.margem !== undefined) {
-                        dadosNormalizados.empresa.margem = simulation.margem;
-                    }
-                    // Adicionar outros campos conforme necessário
-                }
-
-                // Validar e normalizar
-                return window.DataManager.validarENormalizar(dadosNormalizados);
-
-            } catch (error) {
-                console.error('Error normalizing data for export:', error.message);
-                throw new Error(`Data normalization failed: ${error.message}`);
-            }
-        }
-
-        // Fallback simples se DataManager não estiver disponível
-        return simulation;
-    }
-    
-    /**
-     * Validate data structure for export operations
-     * @param {Object} data - Data to validate
-     * @param {string} expectedType - Expected structure type ('aninhada' or 'plana')
-     * @returns {boolean} True if structure is valid
-     */
-    validateDataStructure(data, expectedType = 'aninhada') {
-        if (!data || typeof data !== 'object') {
-            return false;
-        }
-
-        // Usar DataManager para detecção de estrutura se disponível
-        if (typeof window.DataManager !== 'undefined' && 
-            typeof window.DataManager.detectarTipoEstrutura === 'function') {
-            const tipoDetectado = window.DataManager.detectarTipoEstrutura(data);
-            return tipoDetectado === expectedType;
-        }
-
-        // Fallback para validação básica
-        if (expectedType === 'aninhada') {
-            return data.empresa !== undefined || data.parametrosFiscais !== undefined;
-        } else if (expectedType === 'plana') {
-            return data.empresa === undefined && (data.faturamento !== undefined || data.aliquota !== undefined);
-        }
-
-        return false;
     }
 }
 
