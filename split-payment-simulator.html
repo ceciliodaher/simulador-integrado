@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador de Impacto do Split Payment no Fluxo de Caixa</title>
+    <title>Simulador de Impacto da Reforma Tributária no Fluxo de Caixa</title>
     
      <!-- Bibliotecas externas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -20,6 +20,39 @@
 	<link rel="stylesheet" href="css/importacao.css">
 </head>
 <body>
+	<div id="cache-alert" class="cache-alert-overlay">
+		<div class="cache-alert-box">
+			<div class="cache-alert-header">
+				<h3>⚠️ Atenção: Limpe o Cache do Navegador</h3>
+				<span id="close-cache-alert" class="close-alert">&times;</span>
+			</div>
+			<div class="cache-alert-content">
+				<p>Para garantir que você tenha a última versão e o funcionamento correto do simulador, recomendamos <strong>limpar o cache do seu navegador</strong> antes de iniciar.</p>
+
+				<div class="shortcut-container">
+					<div class="shortcut-item">
+						<div class="shortcut-os">Windows</div>
+						<div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>F5</kbd></div>
+						<div class="shortcut-alt">ou</div>
+						<div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd></div>
+					</div>
+					<div class="shortcut-item">
+						<div class="shortcut-os">Mac</div>
+						<div class="shortcut-keys"><kbd>⌘ Cmd</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd></div>
+					</div>
+					<div class="shortcut-item">
+						<div class="shortcut-os">Linux/Unix</div>
+						<div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd></div>
+					</div>
+				</div>
+
+				<p class="cache-alert-note">Se o simulador apresentar comportamento inesperado após atualização, repita o processo de limpeza de cache. Aguarde o carregamento completo do sistema.</p>
+
+				<button id="proceed-button" class="proceed-btn">Entendi, Prosseguir</button>
+			</div>
+		</div>
+	</div>
+	<div class="beta-banner">VERSÃO BETA - APENAS PARA TESTES</div>
     <div class="container">
         <div class="header">
             <img src="imagens/expertzy-it.png" alt="Expertzy Inteligência Tributária" class="logo">
@@ -1465,8 +1498,13 @@
         </div>
         
         <div class="footer">
-            &copy; 2025 Expertzy Inteligência Tributária
-        </div>
+			<div class="copyright">
+				&copy; 2025 Expertzy Inteligência Tributária
+			</div>
+			<div class="footer-contact">
+				Dúvidas, erros ou sugestões? Entre em contato: <a href="mailto:contato@expertzy.com.br">contato@expertzy.com.br</a>
+			</div>
+		</div>
     </div>
 
     <!-- Modal de confirmação de exclusão -->
@@ -1504,9 +1542,12 @@
     
     <!-- Scripts principais -->
 	<!-- Primeiro os utilitários -->
+	<!-- Scripts de utilidades e exportação -->
 	<script src="js/utils/formatters.js"></script>
 	<script src="js/utils/validators.js"></script>
 	<script src="js/utils/data-manager.js"></script>
+	<script src="js/utils/export-core.js"></script>
+	<script src="js/utils/document-exporters.js"></script>
 	<script src="js/utils/export-tools.js"></script>
 	<script src="js/utils/currency-formatter.js"></script>
 
@@ -2203,6 +2244,40 @@
 		document.addEventListener('DOMContentLoaded', function() {
 			TabsManager.inicializar();
 		});
+	
+	// Controle do modal de aviso de cache
+	document.addEventListener('DOMContentLoaded', function() {
+		const cacheAlert = document.getElementById('cache-alert');
+		const closeButton = document.getElementById('close-cache-alert');
+		const proceedButton = document.getElementById('proceed-button');
+
+		// Verificar se o usuário já viu o aviso na sessão atual
+		const alertShown = sessionStorage.getItem('cacheAlertShown');
+
+		if (!alertShown) {
+			cacheAlert.style.display = 'flex';
+		} else {
+			cacheAlert.style.display = 'none';
+		}
+
+		// Função para fechar o modal
+		function closeAlert() {
+			cacheAlert.style.display = 'none';
+			// Marcar que o usuário já viu o aviso nesta sessão
+			sessionStorage.setItem('cacheAlertShown', 'true');
+		}
+
+		// Eventos para fechar o modal
+		closeButton.addEventListener('click', closeAlert);
+		proceedButton.addEventListener('click', closeAlert);
+
+		// Fechar modal ao clicar fora da caixa (opcional)
+		cacheAlert.addEventListener('click', function(event) {
+			if (event.target === cacheAlert) {
+				closeAlert();
+			}
+		});
+	});
 	</script>
 
 </body>

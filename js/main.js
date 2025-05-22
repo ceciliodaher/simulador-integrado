@@ -301,19 +301,31 @@ function inicializarEventosPrincipais() {
     const btnExportarPDF = document.getElementById('btn-exportar-pdf');
     if (btnExportarPDF) {
         btnExportarPDF.addEventListener('click', function() {
-            if (typeof ExportTools !== 'undefined') {
-                ExportTools.exportarParaPDF();
+            console.log('Botão Exportar PDF clicado');
+            if (typeof window.ExportTools !== 'undefined' && typeof window.ExportTools.exportarParaPDF === 'function') {
+                window.ExportTools.exportarParaPDF();
+            } else {
+                console.error('ExportTools não disponível ou método exportarParaPDF não encontrado');
+                alert('Ferramenta de exportação PDF não está disponível no momento.');
             }
         });
+    } else {
+        console.warn('Botão Exportar PDF não encontrado no DOM');
     }
-    
+
     const btnExportarExcel = document.getElementById('btn-exportar-excel');
     if (btnExportarExcel) {
         btnExportarExcel.addEventListener('click', function() {
-            if (typeof ExportTools !== 'undefined') {
-                ExportTools.exportarParaExcel();
+            console.log('Botão Exportar Excel clicado');
+            if (typeof window.ExportTools !== 'undefined' && typeof window.ExportTools.exportarParaExcel === 'function') {
+                window.ExportTools.exportarParaExcel();
+            } else {
+                console.error('ExportTools não disponível ou método exportarParaExcel não encontrado');
+                alert('Ferramenta de exportação Excel não está disponível no momento.');
             }
         });
+    } else {
+        console.warn('Botão Exportar Excel não encontrado no DOM');
     }
     
     const btnExportarMemoria = document.getElementById('btn-exportar-memoria');
@@ -329,9 +341,12 @@ function inicializarEventosPrincipais() {
     const btnExportarEstrategiasPDF = document.getElementById('btn-exportar-estrategias-pdf');
     if (btnExportarEstrategiasPDF) {
         btnExportarEstrategiasPDF.addEventListener('click', function() {
-            if (typeof ExportTools !== 'undefined') {
-                // Chamar a mesma função da aba Simulação
-                ExportTools.exportarParaPDF();
+            console.log('Botão Exportar Estratégias PDF clicado');
+            if (typeof window.ExportTools !== 'undefined' && typeof window.ExportTools.exportarParaPDF === 'function') {
+                window.ExportTools.exportarParaPDF();
+            } else {
+                console.error('ExportTools não disponível ou método exportarParaPDF não encontrado');
+                alert('Ferramenta de exportação PDF não está disponível no momento.');
             }
         });
     }
@@ -339,9 +354,12 @@ function inicializarEventosPrincipais() {
     const btnExportarEstrategiasExcel = document.getElementById('btn-exportar-estrategias-excel');
     if (btnExportarEstrategiasExcel) {
         btnExportarEstrategiasExcel.addEventListener('click', function() {
-            if (typeof ExportTools !== 'undefined') {
-                // Chamar a mesma função da aba Simulação
-                ExportTools.exportarParaExcel();
+            console.log('Botão Exportar Estratégias Excel clicado');
+            if (typeof window.ExportTools !== 'undefined' && typeof window.ExportTools.exportarParaExcel === 'function') {
+                window.ExportTools.exportarParaExcel();
+            } else {
+                console.error('ExportTools não disponível ou método exportarParaExcel não encontrado');
+                alert('Ferramenta de exportação Excel não está disponível no momento.');
             }
         });
     }
@@ -1102,3 +1120,13 @@ function obterValorDePropertyPath(objeto, caminho) {
     
     return valorAtual;
 }
+
+// Garantir que ExportTools seja inicializado
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof window.ExportTools !== 'undefined' && typeof window.ExportTools.inicializar === 'function') {
+        console.log('Inicializando ExportTools via main.js');
+        window.ExportTools.inicializar();
+    } else {
+        console.warn('ExportTools não disponível. Certifique-se de importar export-tools.js antes de main.js');
+    }
+});
