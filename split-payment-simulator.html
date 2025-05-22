@@ -27,7 +27,7 @@
 				<span id="close-cache-alert" class="close-alert">&times;</span>
 			</div>
 			<div class="cache-alert-content">
-				<p>Para garantir que você tenha a última versão e o funcionamento correto do simulador, recomendamos <strong>limpar o cache do seu navegador</strong> antes de iniciar.</p>
+				<p>Para garantir o funcionamento correto do simulador, recomendamos <strong>limpar o cache do seu navegador</strong> antes de iniciar.</p>
 
 				<div class="shortcut-container">
 					<div class="shortcut-item">
@@ -107,6 +107,101 @@
 					
 						<div class="group-box">
 							<h3>Sistema Tributário Atual</h3>
+							<!-- Nova seção de débitos e créditos tributários -->
+							<div class="group-box">
+								<h4>Composição Tributária Detalhada</h4>
+								<div class="form-row">
+									<div class="form-column">
+										<h5>Débitos Tributários (R$ por mês)</h5>
+										<div class="form-group">
+											<label for="debito-pis">Débito PIS:</label>
+											<input type="text" id="debito-pis" class="money-input" readonly>
+										</div>
+										<div class="form-group">
+											<label for="debito-cofins">Débito COFINS:</label>
+											<input type="text" id="debito-cofins" class="money-input" readonly>
+										</div>
+										<div class="form-group">
+											<label for="debito-icms">Débito ICMS:</label>
+											<input type="text" id="debito-icms" class="money-input" readonly>
+										</div>
+										<div class="form-group">
+											<label for="debito-ipi">Débito IPI:</label>
+											<input type="text" id="debito-ipi" class="money-input" readonly>
+										</div>
+										<div class="form-group">
+											<label for="debito-iss">Débito ISS:</label>
+											<input type="text" id="debito-iss" class="money-input" readonly>
+										</div>
+									</div>
+									<div class="form-column">
+										<h5>Créditos Tributários (R$ por mês)</h5>
+										<div class="form-group">
+											<label for="credito-pis">Crédito PIS:</label>
+											<input type="text" id="credito-pis" class="money-input" readonly>
+										</div>
+										<div class="form-group">
+											<label for="credito-cofins">Crédito COFINS:</label>
+											<input type="text" id="credito-cofins" class="money-input" readonly>
+										</div>
+										<div class="form-group">
+											<label for="credito-icms">Crédito ICMS:</label>
+											<input type="text" id="credito-icms" class="money-input" readonly>
+										</div>
+										<div class="form-group">
+											<label for="credito-ipi">Crédito IPI:</label>
+											<input type="text" id="credito-ipi" class="money-input" readonly>
+										</div>
+										<div class="form-group">
+											<label for="credito-iss">Crédito ISS:</label>
+											<input type="text" id="credito-iss" class="money-input" value="R$ 0,00" readonly>
+										</div>
+									</div>
+									<div class="form-column">
+										<h5>Alíquotas Efetivas (%)</h5>
+										<div class="form-group">
+											<label for="aliquota-efetiva-pis">PIS Efetivo:</label>
+											<input type="number" id="aliquota-efetiva-pis" step="0.01" readonly>
+										</div>
+										<div class="form-group">
+											<label for="aliquota-efetiva-cofins">COFINS Efetivo:</label>
+											<input type="number" id="aliquota-efetiva-cofins" step="0.01" readonly>
+										</div>
+										<div class="form-group">
+											<label for="aliquota-efetiva-icms">ICMS Efetivo:</label>
+											<input type="number" id="aliquota-efetiva-icms" step="0.01" readonly>
+										</div>
+										<div class="form-group">
+											<label for="aliquota-efetiva-ipi">IPI Efetivo:</label>
+											<input type="number" id="aliquota-efetiva-ipi" step="0.01" readonly>
+										</div>
+										<div class="form-group">
+											<label for="aliquota-efetiva-iss">ISS Efetivo:</label>
+											<input type="number" id="aliquota-efetiva-iss" step="0.01" readonly>
+										</div>
+									</div>
+								</div>
+								<div class="form-row">
+									<div class="form-column">
+										<div class="form-group">
+											<label for="total-debitos">Total de Débitos:</label>
+											<input type="text" id="total-debitos" class="money-input" readonly>
+										</div>
+									</div>
+									<div class="form-column">
+										<div class="form-group">
+											<label for="total-creditos">Total de Créditos:</label>
+											<input type="text" id="total-creditos" class="money-input" readonly>
+										</div>
+									</div>
+									<div class="form-column">
+										<div class="form-group">
+											<label for="aliquota-efetiva-total">Alíquota Efetiva Total (%):</label>
+											<input type="number" id="aliquota-efetiva-total" step="0.01" readonly>
+										</div>
+									</div>
+								</div>
+							</div>
 							<div class="form-row">
 								<div class="form-column">
 									<div class="form-group">
@@ -601,6 +696,48 @@
 											<span class="label">Custo Financeiro Total:</span>
 											<span id="custo-financeiro-total" class="value"></span>
 										</div>
+									</div>
+								</div>
+							</div>
+							
+							<!-- Tabela evolutiva da tributação durante a transição -->
+							<div class="result-card" id="transicao-tributaria" style="display: none;">
+								<h4>Evolução da Tributação Durante a Transição (2026-2033)</h4>
+								<div class="table-container">
+									<table class="transition-table" id="tabela-transicao">
+										<thead>
+											<tr>
+												<th>Ano</th>
+												<th>% Sistema Atual</th>
+												<th>% IVA Dual</th>
+												<th>Tributos Atuais</th>
+												<th>IVA Dual</th>
+												<th>Total de Impostos</th>
+												<th>Alíquota Efetiva</th>
+											</tr>
+										</thead>
+										<tbody>
+											<!-- Será preenchido dinamicamente -->
+										</tbody>
+									</table>
+								</div>
+							</div>
+
+							<!-- Detalhamento por imposto durante a transição -->
+							<div class="result-card" id="detalhamento-impostos-transicao" style="display: none;">
+								<h4>Detalhamento por Imposto Durante a Transição</h4>
+								<div class="charts-grid">
+									<div class="chart-container">
+										<canvas id="grafico-evolucao-pis-cofins"></canvas>
+									</div>
+									<div class="chart-container">
+										<canvas id="grafico-evolucao-icms"></canvas>
+									</div>
+									<div class="chart-container">
+										<canvas id="grafico-evolucao-ipi"></canvas>
+									</div>
+									<div class="chart-container">
+										<canvas id="grafico-evolucao-total"></canvas>
 									</div>
 								</div>
 							</div>
