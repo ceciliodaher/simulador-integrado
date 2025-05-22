@@ -169,18 +169,26 @@ function inicializarEventosPrincipais() {
                 }
 
                 // Obter dados usando o DataManager (estrutura aninhada)
-                const dadosAninhados = window.DataManager.obterDadosDoFormulario();
+                let dadosAninhados = window.DataManager.obterDadosDoFormulario();
                 console.log('Dados obtidos do formulário (estrutura aninhada):', dadosAninhados);
+
+                // NOVA FUNCIONALIDADE: Integrar dados do SPED se disponíveis
+                dadosAninhados = integrarDadosSpedNaEstruturaPadrao(dadosAninhados);
+
+                // Verificar se há dados do SPED e notificar
+                if (dadosAninhados.dadosSpedImportados) {
+                    console.log('Dados do SPED detectados e integrados à simulação');
+                    adicionarNotificacaoSped();
+                }
 
                 // Se o repositório estiver disponível, atualizar com os novos dados
                 if (typeof SimuladorRepository !== 'undefined') {
-                    // Atualizar cada seção com os dados validados
                     Object.keys(dadosAninhados).forEach(secao => {
                         if (dadosAninhados[secao]) {
                             SimuladorRepository.atualizarSecao(secao, dadosAninhados[secao]);
                         }
                     });
-                    console.log('Repositório atualizado com os dados do formulário');
+                    console.log('Repositório atualizado com os dados do formulário e SPED');
                 }
 
                 // Executar simulação, passando os dados obtidos
@@ -502,6 +510,32 @@ function inicializarEventosPrincipais() {
 }
 
 /**
+ * Adiciona notificação visual sobre uso de dados do SPED
+ */
+function adicionarNotificacaoSped() {
+    // Remover notificação anterior se existir
+    const notificacaoExistente = document.querySelector('.notificacao-sped');
+    if (notificacaoExistente) {
+        notificacaoExistente.remove();
+    }
+
+    // Criar nova notificação
+    const notificacao = document.createElement('div');
+    notificacao.className = 'alert alert-info notificacao-sped';
+    notificacao.innerHTML = `
+        <strong><i class="icon-info-circle"></i> Dados SPED Integrados:</strong> 
+        A simulação está utilizando dados tributários reais extraídos dos arquivos SPED importados, 
+        proporcionando maior precisão nos cálculos.
+    `;
+
+    // Inserir no início da área de resultados
+    const divResultados = document.getElementById('resultados');
+    if (divResultados) {
+        divResultados.insertBefore(notificacao, divResultados.firstChild);
+    }
+}
+
+/**
  * Atualiza os resultados exibidos com base no ano selecionado
  */
 function atualizarResultadosPorAno() {
@@ -568,6 +602,256 @@ function atualizarResultadosPorAno() {
 function atualizarInterface(resultado) {
     console.log('Atualizando interface com resultados');
     
+    if (!resultado || !resultado.impactoBase) {
+        console.error('Resultados inválidos ou incompletos:', resultado);
+        alert('Não foi possível processar os resultados da simulação. Verifique o console para detalhes.');
+        return;
+    }
+    
+    try {
+        window.resultadosSimulacao = resultado;
+        
+        const formatarMoeda = window.DataManager.formatarMoeda;
+        const formatarPercentual = window.DataManager.formatarPercentual;
+        
+        const splitPaymentConsiderado = resultado.impactoBase.splitPaymentConsiderado !== false;
+        
+        const divResultados = document.getElementById('resultados');
+        if (divResultados) {
+            const avisoExistente = divResultados.querySelector('.split-payment-notice');
+            if (avisoExistente) avisoExistente.remove();
+            
+            if (!splitPaymentConsiderado) {
+                const aviso = document.createElement('div');
+                aviso.className = 'alert alert-warning split-payment-notice';
+                aviso.innerHTML = '<strong>Atenção:</strong> Simulação executada sem considerar o mecanismo de Split Payment.';
+                divResultados.insertBefore(aviso, divResultados.firstChild);
+            }
+        }
+        
+        const seletorAno = document.getElementById('ano-visualizacao');
+        const anoSelecionado = seletorAno ? parseInt(seletorAno.value) : resultado.projecaoTemporal?.parametros?.anoInicial || 2026;
+        
+        const dadosAno = obterDadosAnoSeguro(resultado, anoSelecionado);
+        
+        // Atualizar elementos existentes
+        document.getElementById('tributo-atual').textContent = formatarMoeda(dadosAno.valorImpostoAtual);
+        document.getElementById('tributo-dual').textContent = formatarMoeda(dadosAno.valorImpostoSplit);
+        document.getElementById('tributo-diferenca').textContent = formatarMoeda(dadosAno.diferencaImposto);
+        document.getElementById('tributo-iva-sem-split').textContent = formatarMoeda(dadosAno.valorImpostoIVASemSplit);
+        document.getElementById('tributo-diferenca-iva-sem-split').textContent = formatarMoeda(dadosAno.diferencaImpostoIVASemSplit);
+        
+        // Atualizar capital de giro
+        document.getElementById('capital-giro-atual').textContent = formatarMoeda(dadosAno.capitalGiroAtual);
+        document.getElementById('capital-giro-iva-sem-split').textContent = formatarMoeda(dadosAno.capitalGiroIVASemSplit);
+        document.getElementById('capital-giro-split').textContent = formatarMoeda(dadosAno.capitalGiroSplit);
+        document.getElementById('capital-giro-impacto').textContent = formatarMoeda(dadosAno.diferencaCapitalGiro);
+        document.getElementById('capital-giro-impacto-iva-sem-split').textContent = formatarMoeda(dadosAno.diferencaCapitalGiroIVASemSplit);
+        document.getElementById('capital-giro-necessidade').textContent = formatarMoeda(dadosAno.necessidadeAdicionalCapitalGiro);
+        
+        aplicarClassesCondicionais(dadosAno);
+        
+        // Atualizar margem operacional
+        document.getElementById('margem-atual').textContent = formatarPercentual(dadosAno.margemOriginal);
+        document.getElementById('margem-ajustada').textContent = formatarPercentual(dadosAno.margemAjustada);
+        document.getElementById('margem-impacto').textContent = formatarPercentual(dadosAno.impactoMargem);
+        
+        // Atualizar análise detalhada
+        document.getElementById('percentual-impacto').textContent = formatarPercentual(dadosAno.percentualImpacto);
+        document.getElementById('impacto-dias-faturamento').textContent = (dadosAno.impactoDiasFaturamento || 0).toFixed(1) + ' dias';
+        
+        // Atualizar projeção temporal
+        document.getElementById('total-necessidade-giro').textContent = formatarMoeda(dadosAno.totalNecessidadeGiro);
+        document.getElementById('custo-financeiro-total').textContent = formatarMoeda(dadosAno.custoFinanceiroTotal);
+        
+        // NOVA FUNCIONALIDADE: Atualizar tabela de transição
+        atualizarTabelaTransicao(resultado);
+        
+        // NOVA FUNCIONALIDADE: Atualizar débitos, créditos e alíquotas efetivas
+        atualizarComposicaoTributaria(resultado, anoSelecionado);
+        
+        const divResultadosDetalhados = document.getElementById('resultados-detalhados');
+        if (divResultadosDetalhados) {
+            divResultadosDetalhados.style.display = 'block';
+        }
+        
+        // Mostrar seções de transição
+        const divTransicao = document.getElementById('transicao-tributaria');
+        const divDetalhamento = document.getElementById('detalhamento-impostos-transicao');
+        if (divTransicao) divTransicao.style.display = 'block';
+        if (divDetalhamento) divDetalhamento.style.display = 'block';
+        
+        window.memoriaCalculoSimulacao = resultado.memoriaCalculo;
+        
+        garantirEstruturaExportacao(resultado);
+        
+        window.DataManager.logTransformacao(
+            resultado, 
+            'Interface Atualizada', 
+            'Atualização da Interface com Resultados'
+        );
+        
+        console.log('Interface atualizada com sucesso');
+    } catch (erro) {
+        console.error('Erro ao atualizar interface:', erro);
+        alert('Ocorreu um erro ao exibir os resultados: ' + erro.message);
+    }
+}
+
+/**
+ * Obtém dados do ano de forma segura, verificando múltiplas estruturas
+ * @param {Object} resultado - Resultado da simulação
+ * @param {number} ano - Ano selecionado
+ * @returns {Object} Dados do ano com valores seguros
+ */
+function obterDadosAnoSeguro(resultado, ano) {
+    // Valores padrão seguros
+    const dadosSeguro = {
+        valorImpostoAtual: 0,
+        valorImpostoSplit: 0,
+        valorImpostoIVASemSplit: 0,
+        diferencaImposto: 0,
+        diferencaImpostoIVASemSplit: 0,
+        capitalGiroAtual: 0,
+        capitalGiroSplit: 0,
+        capitalGiroIVASemSplit: 0,
+        diferencaCapitalGiro: 0,
+        diferencaCapitalGiroIVASemSplit: 0,
+        necessidadeAdicionalCapitalGiro: 0,
+        margemOriginal: 0,
+        margemAjustada: 0,
+        impactoMargem: 0,
+        percentualImpacto: 0,
+        impactoDiasFaturamento: 0,
+        totalNecessidadeGiro: 0,
+        custoFinanceiroTotal: 0
+    };
+    
+    try {
+        // Tentar obter dados anuais específicos
+        if (resultado.projecaoTemporal?.resultadosAnuais?.[ano]) {
+            const dadosAno = resultado.projecaoTemporal.resultadosAnuais[ano];
+            
+            dadosSeguro.valorImpostoAtual = dadosAno.resultadoAtual?.impostos?.total || dadosAno.resultadoAtual?.valorImpostoTotal || 0;
+            dadosSeguro.valorImpostoSplit = dadosAno.resultadoSplitPayment?.impostos?.total || dadosAno.resultadoSplitPayment?.valorImpostoTotal || 0;
+            dadosSeguro.valorImpostoIVASemSplit = dadosAno.resultadoIVASemSplit?.impostos?.total || dadosAno.resultadoIVASemSplit?.valorImpostoTotal || dadosSeguro.valorImpostoAtual;
+            
+            dadosSeguro.capitalGiroAtual = dadosAno.resultadoAtual?.capitalGiroDisponivel || 0;
+            dadosSeguro.capitalGiroSplit = dadosAno.resultadoSplitPayment?.capitalGiroDisponivel || 0;
+            dadosSeguro.capitalGiroIVASemSplit = dadosAno.resultadoIVASemSplit?.capitalGiroDisponivel || dadosSeguro.capitalGiroAtual;
+            
+            dadosSeguro.diferencaCapitalGiro = dadosAno.diferencaCapitalGiro || (dadosSeguro.capitalGiroSplit - dadosSeguro.capitalGiroAtual);
+            dadosSeguro.diferencaCapitalGiroIVASemSplit = dadosAno.diferencaCapitalGiroIVASemSplit || (dadosSeguro.capitalGiroIVASemSplit - dadosSeguro.capitalGiroAtual);
+            dadosSeguro.necessidadeAdicionalCapitalGiro = dadosAno.necessidadeAdicionalCapitalGiro || Math.abs(dadosSeguro.diferencaCapitalGiro) * 1.2;
+            
+            dadosSeguro.percentualImpacto = dadosAno.percentualImpacto || 0;
+            dadosSeguro.impactoDiasFaturamento = dadosAno.impactoDiasFaturamento || 0;
+        } else {
+            // Usar dados do impacto base como fallback
+            const impactoBase = resultado.impactoBase;
+            
+            dadosSeguro.valorImpostoAtual = impactoBase.resultadoAtual?.impostos?.total || impactoBase.resultadoAtual?.valorImpostoTotal || 0;
+            dadosSeguro.valorImpostoSplit = impactoBase.resultadoSplitPayment?.impostos?.total || impactoBase.resultadoSplitPayment?.valorImpostoTotal || 0;
+            dadosSeguro.valorImpostoIVASemSplit = impactoBase.resultadoIVASemSplit?.impostos?.total || impactoBase.resultadoIVASemSplit?.valorImpostoTotal || dadosSeguro.valorImpostoAtual;
+            
+            dadosSeguro.capitalGiroAtual = impactoBase.resultadoAtual?.capitalGiroDisponivel || 0;
+            dadosSeguro.capitalGiroSplit = impactoBase.resultadoSplitPayment?.capitalGiroDisponivel || 0;
+            dadosSeguro.capitalGiroIVASemSplit = impactoBase.resultadoIVASemSplit?.capitalGiroDisponivel || dadosSeguro.capitalGiroAtual;
+            
+            dadosSeguro.diferencaCapitalGiro = impactoBase.diferencaCapitalGiro || 0;
+            dadosSeguro.diferencaCapitalGiroIVASemSplit = impactoBase.diferencaCapitalGiroIVASemSplit || 0;
+            dadosSeguro.necessidadeAdicionalCapitalGiro = impactoBase.necessidadeAdicionalCapitalGiro || 0;
+            
+            dadosSeguro.margemOriginal = (impactoBase.margemOperacionalOriginal || 0) * 100;
+            dadosSeguro.margemAjustada = (impactoBase.margemOperacionalAjustada || 0) * 100;
+            dadosSeguro.impactoMargem = impactoBase.impactoMargem || 0;
+            
+            dadosSeguro.percentualImpacto = impactoBase.percentualImpacto || 0;
+            dadosSeguro.impactoDiasFaturamento = impactoBase.impactoDiasFaturamento || 0;
+        }
+        
+        // Calcular diferenças de impostos
+        dadosSeguro.diferencaImposto = dadosSeguro.valorImpostoSplit - dadosSeguro.valorImpostoAtual;
+        dadosSeguro.diferencaImpostoIVASemSplit = dadosSeguro.valorImpostoIVASemSplit - dadosSeguro.valorImpostoAtual;
+        
+        // Obter dados da projeção temporal
+        if (resultado.projecaoTemporal?.impactoAcumulado) {
+            dadosSeguro.totalNecessidadeGiro = resultado.projecaoTemporal.impactoAcumulado.totalNecessidadeCapitalGiro || 0;
+            dadosSeguro.custoFinanceiroTotal = resultado.projecaoTemporal.impactoAcumulado.custoFinanceiroTotal || 0;
+        }
+        
+    } catch (erro) {
+        console.warn('Erro ao obter dados do ano, usando valores padrão:', erro);
+    }
+    
+    return dadosSeguro;
+}
+
+/**
+ * Aplica classes CSS condicionais baseadas nos valores
+ * @param {Object} dadosAno - Dados do ano
+ */
+function aplicarClassesCondicionais(dadosAno) {
+    const impactoElement = document.getElementById('capital-giro-impacto');
+    if (impactoElement) {
+        impactoElement.classList.remove('valor-negativo', 'valor-positivo');
+        if (dadosAno.diferencaCapitalGiro < 0) {
+            impactoElement.classList.add('valor-negativo');
+        } else if (dadosAno.diferencaCapitalGiro > 0) {
+            impactoElement.classList.add('valor-positivo');
+        }
+    }
+    
+    const impactoIVASemSplitElement = document.getElementById('capital-giro-impacto-iva-sem-split');
+    if (impactoIVASemSplitElement) {
+        impactoIVASemSplitElement.classList.remove('valor-negativo', 'valor-positivo');
+        if (dadosAno.diferencaCapitalGiroIVASemSplit < 0) {
+            impactoIVASemSplitElement.classList.add('valor-negativo');
+        } else if (dadosAno.diferencaCapitalGiroIVASemSplit > 0) {
+            impactoIVASemSplitElement.classList.add('valor-positivo');
+        }
+    }
+}
+
+/**
+ * Garante que existe estrutura adequada para exportação
+ * @param {Object} resultado - Resultado da simulação
+ */
+function garantirEstruturaExportacao(resultado) {
+    if (!resultado.resultadosExportacao && resultado.projecaoTemporal?.resultadosAnuais) {
+        const anos = Object.keys(resultado.projecaoTemporal.resultadosAnuais).sort();
+        const resultadosPorAno = {};
+        
+        anos.forEach(ano => {
+            const dadosAno = resultado.projecaoTemporal.resultadosAnuais[ano];
+            resultadosPorAno[ano] = {
+                capitalGiroSplitPayment: dadosAno.resultadoSplitPayment?.capitalGiroDisponivel || 0,
+                capitalGiroAtual: dadosAno.resultadoAtual?.capitalGiroDisponivel || 0,
+                capitalGiroIVASemSplit: dadosAno.resultadoIVASemSplit?.capitalGiroDisponivel || dadosAno.resultadoAtual?.capitalGiroDisponivel || 0,
+                diferenca: dadosAno.diferencaCapitalGiro || 0,
+                diferencaIVASemSplit: dadosAno.diferencaCapitalGiroIVASemSplit || 0,
+                percentualImpacto: dadosAno.percentualImpacto || 0,
+                impostoDevido: dadosAno.resultadoSplitPayment?.impostos?.total || 0,
+                sistemaAtual: dadosAno.resultadoAtual?.impostos?.total || 0
+            };
+        });
+        
+        resultado.resultadosExportacao = {
+            anos: anos,
+            resultadosPorAno: resultadosPorAno,
+            resumo: {
+                variacaoTotal: Object.values(resultadosPorAno).reduce((acc, ano) => acc + ano.diferenca, 0),
+                tendenciaGeral: Object.values(resultadosPorAno).reduce((acc, ano) => acc + ano.diferenca, 0) > 0 ? "aumento" : "redução"
+            }
+        };
+        
+        console.log('Estrutura de exportação gerada automaticamente');
+    }
+}
+
+function atualizarInterface(resultado) {
+    console.log('Atualizando interface com resultados');
+    
     // Verifica se temos resultados válidos
     if (!resultado || !resultado.impactoBase) {
         console.error('Resultados inválidos ou incompletos:', resultado);
@@ -603,98 +887,41 @@ function atualizarInterface(resultado) {
         
         // Obter o ano selecionado (ou usar o primeiro ano disponível)
         const seletorAno = document.getElementById('ano-visualizacao');
-        const anoSelecionado = seletorAno ? parseInt(seletorAno.value) : resultado.projecaoTemporal.parametros.anoInicial;
+        const anoSelecionado = seletorAno ? parseInt(seletorAno.value) : resultado.projecaoTemporal?.parametros?.anoInicial || 2026;
         
-        // Se temos resultados por ano, usar o ano selecionado, caso contrário usar o impactoBase
-        if (resultado.projecaoTemporal && resultado.projecaoTemporal.resultadosAnuais && 
-            resultado.projecaoTemporal.resultadosAnuais[anoSelecionado]) {
-            
-            // Chamar a função que atualiza resultados por ano
-            atualizarResultadosPorAno();
-            
-        } else {
-            // Atualizar elementos de comparação de sistemas tributários
-            const valorImpostoAtual = resultado.impactoBase.resultadoAtual?.valorImpostoTotal || 0;
-            const valorImpostoSplit = resultado.impactoBase.resultadoSplitPayment?.valorImpostoTotal || 0;
-            const valorImpostoIVASemSplit = resultado.impactoBase.resultadoIVASemSplit?.valorImpostoTotal || 0;
-            
-            document.getElementById('tributo-atual').textContent = formatarMoeda(valorImpostoAtual);
-            document.getElementById('tributo-dual').textContent = formatarMoeda(valorImpostoSplit);
-            document.getElementById('tributo-diferenca').textContent = formatarMoeda(valorImpostoSplit - valorImpostoAtual);
-            document.getElementById('tributo-iva-sem-split').textContent = formatarMoeda(valorImpostoIVASemSplit);
-            document.getElementById('tributo-diferenca-iva-sem-split').textContent = formatarMoeda(valorImpostoIVASemSplit - valorImpostoAtual);
-            
-            // Atualizar elementos de impacto no capital de giro
-            const capitalGiroAtual = resultado.impactoBase.resultadoAtual?.capitalGiroDisponivel || 0;
-            const capitalGiroSplit = resultado.impactoBase.resultadoSplitPayment?.capitalGiroDisponivel || 0;
-            const capitalGiroIVASemSplit = resultado.impactoBase.resultadoIVASemSplit?.capitalGiroDisponivel || 0;
-            const diferencaCapitalGiro = resultado.impactoBase.diferencaCapitalGiro || 0;
-            const diferencaCapitalGiroIVASemSplit = resultado.impactoBase.diferencaCapitalGiroIVASemSplit || 0;
-            const necessidadeAdicionalCapitalGiro = resultado.impactoBase.necessidadeAdicionalCapitalGiro || 0;
-            
-            document.getElementById('capital-giro-atual').textContent = formatarMoeda(capitalGiroAtual);
-            document.getElementById('capital-giro-iva-sem-split').textContent = formatarMoeda(capitalGiroIVASemSplit);
-            document.getElementById('capital-giro-split').textContent = formatarMoeda(capitalGiroSplit);
-            document.getElementById('capital-giro-impacto').textContent = formatarMoeda(diferencaCapitalGiro);
-            document.getElementById('capital-giro-impacto-iva-sem-split').textContent = formatarMoeda(diferencaCapitalGiroIVASemSplit);
-            document.getElementById('capital-giro-necessidade').textContent = formatarMoeda(necessidadeAdicionalCapitalGiro);
-            
-            // Adicionar classe CSS baseada no valor
-            const impactoElement = document.getElementById('capital-giro-impacto');
-            if (impactoElement) {
-                if (diferencaCapitalGiro < 0) {
-                    impactoElement.classList.add('valor-negativo');
-                } else {
-                    impactoElement.classList.remove('valor-negativo');
-                }
-            }
-            
-            const impactoIVASemSplitElement = document.getElementById('capital-giro-impacto-iva-sem-split');
-            if (impactoIVASemSplitElement) {
-                if (diferencaCapitalGiroIVASemSplit < 0) {
-                    impactoIVASemSplitElement.classList.add('valor-negativo');
-                } else {
-                    impactoIVASemSplitElement.classList.remove('valor-negativo');
-                }
-            }
-            
-            // Atualizar elementos de impacto na margem operacional
-            const margemOriginal = resultado.impactoBase.margemOperacionalOriginal * 100 || 0;
-            const margemAjustada = resultado.impactoBase.margemOperacionalAjustada * 100 || 0;
-            const impactoMargem = resultado.impactoBase.impactoMargem || 0;
-            
-            document.getElementById('margem-atual').textContent = formatarPercentual(margemOriginal);
-            document.getElementById('margem-ajustada').textContent = formatarPercentual(margemAjustada);
-            document.getElementById('margem-impacto').textContent = formatarPercentual(impactoMargem);
-            
-            // Atualizar elementos da análise de impacto detalhada
-            const percentualImpacto = resultado.impactoBase.percentualImpacto || 0;
-            const impactoDiasFaturamento = resultado.impactoBase.impactoDiasFaturamento || 0;
-            
-            document.getElementById('percentual-impacto').textContent = formatarPercentual(percentualImpacto);
-            document.getElementById('impacto-dias-faturamento').textContent = impactoDiasFaturamento.toFixed(1) + ' dias';
-            
-            // Atualizar elementos da projeção temporal do impacto
-            const totalNecessidadeGiro = resultado.projecaoTemporal?.impactoAcumulado?.totalNecessidadeCapitalGiro || 0;
-            const custoFinanceiroTotal = resultado.projecaoTemporal?.impactoAcumulado?.custoFinanceiroTotal || 0;
-            
-            document.getElementById('total-necessidade-giro').textContent = formatarMoeda(totalNecessidadeGiro);
-            document.getElementById('custo-financeiro-total').textContent = formatarMoeda(custoFinanceiroTotal);
-        }
+        // Atualizar com dados robustos, verificando múltiplas estruturas possíveis
+        const dadosAno = obterDadosAnoSeguro(resultado, anoSelecionado);
         
-        // Se split-payment não for considerado, ajustar labels
-        if (!splitPaymentConsiderado) {
-            // Mudar o título da coluna de comparação
-            const labelSistema = document.querySelector('.result-card:first-child h4');
-            if (labelSistema) labelSistema.textContent = 'Impacto do Novo Sistema Tributário';
-            
-            // Atualizar labels específicos
-            const labelSegundoSistema = document.querySelector('.result-card:first-child .result-grid .result-item:nth-child(2) .label');
-            if (labelSegundoSistema) labelSegundoSistema.textContent = 'Sistema IVA Sem Split:';
-            
-            const labelCapitalGiroSplit = document.querySelector('.result-card:nth-child(2) .result-grid .result-item:nth-child(3) .label');
-            if (labelCapitalGiroSplit) labelCapitalGiroSplit.textContent = 'Sistema IVA:';
-        }
+        // Atualizar elementos de comparação de sistemas tributários
+        document.getElementById('tributo-atual').textContent = formatarMoeda(dadosAno.valorImpostoAtual);
+        document.getElementById('tributo-dual').textContent = formatarMoeda(dadosAno.valorImpostoSplit);
+        document.getElementById('tributo-diferenca').textContent = formatarMoeda(dadosAno.diferencaImposto);
+        document.getElementById('tributo-iva-sem-split').textContent = formatarMoeda(dadosAno.valorImpostoIVASemSplit);
+        document.getElementById('tributo-diferenca-iva-sem-split').textContent = formatarMoeda(dadosAno.diferencaImpostoIVASemSplit);
+        
+        // Atualizar elementos de impacto no capital de giro
+        document.getElementById('capital-giro-atual').textContent = formatarMoeda(dadosAno.capitalGiroAtual);
+        document.getElementById('capital-giro-iva-sem-split').textContent = formatarMoeda(dadosAno.capitalGiroIVASemSplit);
+        document.getElementById('capital-giro-split').textContent = formatarMoeda(dadosAno.capitalGiroSplit);
+        document.getElementById('capital-giro-impacto').textContent = formatarMoeda(dadosAno.diferencaCapitalGiro);
+        document.getElementById('capital-giro-impacto-iva-sem-split').textContent = formatarMoeda(dadosAno.diferencaCapitalGiroIVASemSplit);
+        document.getElementById('capital-giro-necessidade').textContent = formatarMoeda(dadosAno.necessidadeAdicionalCapitalGiro);
+        
+        // Adicionar classe CSS baseada no valor
+        aplicarClassesCondicionais(dadosAno);
+        
+        // Atualizar elementos de impacto na margem operacional
+        document.getElementById('margem-atual').textContent = formatarPercentual(dadosAno.margemOriginal);
+        document.getElementById('margem-ajustada').textContent = formatarPercentual(dadosAno.margemAjustada);
+        document.getElementById('margem-impacto').textContent = formatarPercentual(dadosAno.impactoMargem);
+        
+        // Atualizar elementos da análise de impacto detalhada
+        document.getElementById('percentual-impacto').textContent = formatarPercentual(dadosAno.percentualImpacto);
+        document.getElementById('impacto-dias-faturamento').textContent = (dadosAno.impactoDiasFaturamento || 0).toFixed(1) + ' dias';
+        
+        // Atualizar elementos da projeção temporal do impacto
+        document.getElementById('total-necessidade-giro').textContent = formatarMoeda(dadosAno.totalNecessidadeGiro);
+        document.getElementById('custo-financeiro-total').textContent = formatarMoeda(dadosAno.custoFinanceiroTotal);
         
         // Mostrar div de resultados detalhados
         const divResultadosDetalhados = document.getElementById('resultados-detalhados');
@@ -704,6 +931,9 @@ function atualizarInterface(resultado) {
         
         // Armazenar resultados para memória de cálculo
         window.memoriaCalculoSimulacao = resultado.memoriaCalculo;
+        
+        // Garantir que temos estrutura de exportação
+        garantirEstruturaExportacao(resultado);
         
         // Registrar log de diagnóstico
         window.DataManager.logTransformacao(
@@ -1121,11 +1351,228 @@ function obterValorDePropertyPath(objeto, caminho) {
     return valorAtual;
 }
 
+/**
+ * Atualiza a tabela de transição tributária
+ * @param {Object} resultado - Resultados da simulação
+ */
+function atualizarTabelaTransicao(resultado) {
+    const tabela = document.getElementById('tabela-transicao');
+    if (!tabela || !resultado.projecaoTemporal?.resultadosAnuais) return;
+    
+    const tbody = tabela.querySelector('tbody');
+    tbody.innerHTML = '';
+    
+    const cronograma = {
+        2026: 0.10, 2027: 0.25, 2028: 0.40, 2029: 0.55,
+        2030: 0.70, 2031: 0.85, 2032: 0.95, 2033: 1.00
+    };
+    
+    const formatarMoeda = window.DataManager.formatarMoeda;
+    
+    Object.keys(resultado.projecaoTemporal.resultadosAnuais).sort().forEach(ano => {
+        const dadosAno = resultado.projecaoTemporal.resultadosAnuais[ano];
+        const percIVA = cronograma[ano] || 0;
+        const percAtual = 1 - percIVA;
+        
+        const tributosAtuais = (dadosAno.resultadoAtual?.impostos?.total || 0) * percAtual;
+        const ivaTotal = (dadosAno.resultadoSplitPayment?.impostos?.total || 0) * percIVA;
+        const totalImpostos = tributosAtuais + ivaTotal;
+        
+        const faturamento = resultado.memoriaCalculo?.dadosEntrada?.empresa?.faturamento || 0;
+        const aliquotaEfetiva = faturamento > 0 ? (totalImpostos / faturamento) * 100 : 0;
+        
+        const linha = document.createElement('tr');
+        linha.innerHTML = `
+            <td>${ano}</td>
+            <td>${(percAtual * 100).toFixed(1)}%</td>
+            <td>${(percIVA * 100).toFixed(1)}%</td>
+            <td>${formatarMoeda(tributosAtuais)}</td>
+            <td>${formatarMoeda(ivaTotal)}</td>
+            <td>${formatarMoeda(totalImpostos)}</td>
+            <td>${aliquotaEfetiva.toFixed(2)}%</td>
+        `;
+        tbody.appendChild(linha);
+    });
+}
+
+/**
+ * Atualiza a composição tributária detalhada
+ * @param {Object} resultado - Resultados da simulação
+ * @param {number} ano - Ano selecionado
+ */
+function atualizarComposicaoTributaria(resultado, ano) {
+    const formatarMoeda = window.DataManager.formatarMoeda;
+    
+    // Obter dados do sistema atual para o ano selecionado
+    const dadosAno = resultado.projecaoTemporal?.resultadosAnuais?.[ano];
+    if (!dadosAno) return;
+    
+    const impostos = dadosAno.resultadoAtual?.decomposicaoImpostos || {};
+    const creditos = dadosAno.resultadoAtual?.decomposicaoCreditos || {};
+    const faturamento = resultado.memoriaCalculo?.dadosEntrada?.empresa?.faturamento || 0;
+    
+    // Atualizar débitos
+    document.getElementById('debito-pis').value = formatarMoeda(impostos.pis || 0);
+    document.getElementById('debito-cofins').value = formatarMoeda(impostos.cofins || 0);
+    document.getElementById('debito-icms').value = formatarMoeda(impostos.icms || 0);
+    document.getElementById('debito-ipi').value = formatarMoeda(impostos.ipi || 0);
+    document.getElementById('debito-iss').value = formatarMoeda(impostos.iss || 0);
+    
+    // Atualizar créditos
+    document.getElementById('credito-pis').value = formatarMoeda(creditos.pis || 0);
+    document.getElementById('credito-cofins').value = formatarMoeda(creditos.cofins || 0);
+    document.getElementById('credito-icms').value = formatarMoeda(creditos.icms || 0);
+    document.getElementById('credito-ipi').value = formatarMoeda(creditos.ipi || 0);
+    document.getElementById('credito-iss').value = formatarMoeda(creditos.iss || 0);
+    
+    // Calcular e atualizar alíquotas efetivas
+    if (faturamento > 0) {
+        document.getElementById('aliquota-efetiva-pis').value = ((impostos.pis || 0) / faturamento * 100).toFixed(3);
+        document.getElementById('aliquota-efetiva-cofins').value = ((impostos.cofins || 0) / faturamento * 100).toFixed(3);
+        document.getElementById('aliquota-efetiva-icms').value = ((impostos.icms || 0) / faturamento * 100).toFixed(3);
+        document.getElementById('aliquota-efetiva-ipi').value = ((impostos.ipi || 0) / faturamento * 100).toFixed(3);
+        document.getElementById('aliquota-efetiva-iss').value = ((impostos.iss || 0) / faturamento * 100).toFixed(3);
+    }
+    
+    // Calcular totais
+    const totalDebitos = Object.values(impostos).reduce((sum, val) => sum + (val || 0), 0);
+    const totalCreditos = Object.values(creditos).reduce((sum, val) => sum + (val || 0), 0);
+    
+    document.getElementById('total-debitos').value = formatarMoeda(totalDebitos);
+    document.getElementById('total-creditos').value = formatarMoeda(totalCreditos);
+    
+    if (faturamento > 0) {
+        const aliquotaEfetivaTotal = (totalDebitos / faturamento) * 100;
+        document.getElementById('aliquota-efetiva-total').value = aliquotaEfetivaTotal.toFixed(3);
+    }
+}
+
+/**
+ * Verifica se há dados do SPED disponíveis e os prioriza nos cálculos
+ * @returns {Object|null} Dados do SPED se disponíveis
+ */
+function obterDadosSpedPrioritarios() {
+    // Verificar se há dados marcados como vindos do SPED
+    const camposSpedData = document.querySelectorAll('.sped-data');
+    if (camposSpedData.length === 0) {
+        return null;
+    }
+
+    // Extrair dados do painel de composição tributária detalhada
+    const extrairValorMonetario = (id) => {
+        const elemento = document.getElementById(id);
+        if (!elemento || !elemento.value) return 0;
+        
+        // Usar o mesmo método do DataManager para extrair valor
+        if (window.DataManager && window.DataManager.extrairValorMonetario) {
+            return window.DataManager.extrairValorMonetario(elemento.value);
+        }
+        
+        // Fallback: extrair valor manualmente
+        return parseFloat(elemento.value.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+    };
+
+    const extrairValorPercentual = (id) => {
+        const elemento = document.getElementById(id);
+        if (!elemento || !elemento.value) return 0;
+        return parseFloat(elemento.value) || 0;
+    };
+
+    return {
+        // Sinalizar que são dados do SPED
+        origemSped: true,
+        
+        // Débitos mensais
+        debitos: {
+            pis: extrairValorMonetario('debito-pis'),
+            cofins: extrairValorMonetario('debito-cofins'),
+            icms: extrairValorMonetario('debito-icms'),
+            ipi: extrairValorMonetario('debito-ipi'),
+            iss: extrairValorMonetario('debito-iss')
+        },
+        
+        // Créditos mensais
+        creditos: {
+            pis: extrairValorMonetario('credito-pis'),
+            cofins: extrairValorMonetario('credito-cofins'),
+            icms: extrairValorMonetario('credito-icms'),
+            ipi: extrairValorMonetario('credito-ipi'),
+            iss: extrairValorMonetario('credito-iss')
+        },
+        
+        // Alíquotas efetivas
+        aliquotasEfetivas: {
+            pis: extrairValorPercentual('aliquota-efetiva-pis'),
+            cofins: extrairValorPercentual('aliquota-efetiva-cofins'),
+            icms: extrairValorPercentual('aliquota-efetiva-icms'),
+            ipi: extrairValorPercentual('aliquota-efetiva-ipi'),
+            iss: extrairValorPercentual('aliquota-efetiva-iss'),
+            total: extrairValorPercentual('aliquota-efetiva-total')
+        },
+        
+        // Totais
+        totalDebitos: extrairValorMonetario('total-debitos'),
+        totalCreditos: extrairValorMonetario('total-creditos')
+    };
+}
+
+/**
+ * Integra dados do SPED na estrutura canônica do DataManager
+ * @param {Object} dadosFormulario - Dados do formulário em estrutura aninhada
+ * @returns {Object} Dados integrados com priorização do SPED
+ */
+function integrarDadosSpedNaEstruturaPadrao(dadosFormulario) {
+    const dadosSped = obterDadosSpedPrioritarios();
+    
+    if (!dadosSped) {
+        return dadosFormulario; // Retorna dados originais se não há SPED
+    }
+
+    // Criar cópia profunda para não modificar o original
+    const dadosIntegrados = JSON.parse(JSON.stringify(dadosFormulario));
+
+    // Adicionar seção específica para dados do SPED
+    dadosIntegrados.dadosSpedImportados = {
+        composicaoTributaria: {
+            debitos: dadosSped.debitos,
+            creditos: dadosSped.creditos,
+            aliquotasEfetivas: dadosSped.aliquotasEfetivas,
+            totalDebitos: dadosSped.totalDebitos,
+            totalCreditos: dadosSped.totalCreditos
+        },
+        origemDados: 'sped',
+        timestampImportacao: new Date().toISOString()
+    };
+
+    // Atualizar parâmetros fiscais baseados no SPED
+    if (!dadosIntegrados.parametrosFiscais) {
+        dadosIntegrados.parametrosFiscais = {};
+    }
+
+    // Sobrescrever valores de débitos e créditos com dados do SPED
+    dadosIntegrados.parametrosFiscais.creditos = {
+        ...dadosIntegrados.parametrosFiscais.creditos,
+        ...dadosSped.creditos
+    };
+
+    // Adicionar flag indicando que há dados do SPED
+    dadosIntegrados.parametrosFiscais.temDadosSped = true;
+    dadosIntegrados.parametrosFiscais.aliquotaEfetivaTotal = dadosSped.aliquotasEfetivas.total / 100;
+
+    return dadosIntegrados;
+}
+
 // Garantir que ExportTools seja inicializado
 document.addEventListener('DOMContentLoaded', function() {
+    // Garantir que ExportTools seja inicializado corretamente
     if (typeof window.ExportTools !== 'undefined' && typeof window.ExportTools.inicializar === 'function') {
         console.log('Inicializando ExportTools via main.js');
-        window.ExportTools.inicializar();
+        const exportInitResult = window.ExportTools.inicializar();
+        if (exportInitResult) {
+            console.log('ExportTools inicializado com sucesso');
+        } else {
+            console.error('Falha na inicialização do ExportTools');
+        }
     } else {
         console.warn('ExportTools não disponível. Certifique-se de importar export-tools.js antes de main.js');
     }
