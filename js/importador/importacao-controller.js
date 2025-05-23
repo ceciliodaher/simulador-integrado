@@ -164,6 +164,14 @@ const ImportacaoController = (function() {
         // Resume os principais dados encontrados para o log
         let mensagens = [];
 
+        // Log detalhado dos valores extraídos para verificação
+        const logDetalhado = {
+            tipo: tipo,
+            arquivo: dados.metadados?.nomeArquivo || 'N/A',
+            timestamp: new Date().toISOString(),
+            registros: {}
+        };
+
         switch(tipo) {
             case 'fiscal':
                 // Resumo de documentos
@@ -171,73 +179,199 @@ const ImportacaoController = (function() {
                 const qtdItens = (dados.itens || []).length;
                 mensagens.push(`Encontrados ${qtdDocumentos} documentos e ${qtdItens} itens.`);
 
-                // Resumo de impostos
-                if (dados.impostos && dados.impostos.icms) {
-                    mensagens.push(`Encontrados ${dados.impostos.icms.length} registros de apuração de ICMS.`);
+                // Log detalhado dos documentos
+                if (dados.documentos && dados.documentos.length > 0) {
+                    const valorTotalDocumentos = dados.documentos.reduce((sum, doc) => sum + (doc.valorTotal || 0), 0);
+                    logDetalhado.registros.documentos = {
+                        quantidade: qtdDocumentos,
+                        valorTotal: valorTotalDocumentos,
+                        amostra: dados.documentos.slice(0, 3) // Primeiros 3 para verificação
+                    };
                 }
 
-                // Verificação de incentivos
+                // Resumo de impostos com valores detalhados
+                if (dados.impostos && dados.impostos.icms) {
+                    const apuracaoICMS = dados.impostos.icms[0] || {};
+                    mensagens.push(`Encontrados ${dados.impostos.icms.length} registros de apuração de ICMS.`);
+
+                    logDetalhado.registros.icms = {
+                        quantidade: dados.impostos.icms.length,
+                        valorTotalDebitos: apuracaoICMS.valorTotalDebitos || 0,
+                        valorTotalCreditos: apuracaoICMS.valorTotalCreditos || 0,
+                        valorSaldoApurado: apuracaoICMS.valorSaldoApurado || 0
+                    };
+
+                    mensagens.push(`ICMS - Débitos: R$ ${(apuracaoICMS.valorTotalDebitos || 0).toFixed(2)}, Créditos: R$ ${(apuracaoICMS.valorTotalCreditos || 0).toFixed(2)}`);
+                }
+
+                // Verificação de incentivos com valores
                 if (dados.ajustes && dados.ajustes.icms) {
                     const ajustesPositivos = dados.ajustes.icms.filter(a => a.valorAjuste > 0);
+                    const valorTotalIncentivos = ajustesPositivos.reduce((sum, a) => sum + (a.valorAjuste || 0), 0);
+
                     if (ajustesPositivos.length > 0) {
-                        mensagens.push(`Encontrados ${ajustesPositivos.length} ajustes positivos, possíveis incentivos fiscais.`);
+                        mensagens.push(`Encontrados ${ajustesPositivos.length} ajustes positivos, possíveis incentivos fiscais (Total: R$ ${valorTotalIncentivos.toFixed(2)}).`);
+                        logDetalhado.registros.incentivos = {
+                            quantidade: ajustesPositivos.length,
+                            valorTotal: valorTotalIncentivos,
+                            detalhes: ajustesPositivos.map(a => ({
+                                codigo: a.codigoAjuste,
+                                valor: a.valorAjuste,
+                                descricao: a.descricaoComplementar
+                            }))
+                        };
                     }
                 }
                 break;
 
             case 'contribuicoes':
-                // Resumo de créditos
+                // Resumo de créditos com valores detalhados
                 if (dados.creditos) {
                     const qtdCreditosPIS = (dados.creditos.pis || []).length;
                     const qtdCreditosCOFINS = (dados.creditos.cofins || []).length;
-                    mensagens.push(`Encontrados ${qtdCreditosPIS} registros de créditos de PIS e ${qtdCreditosCOFINS} de COFINS.`);
+
+                    const valorCreditosPIS = (dados.creditos.pis || []).reduce((sum, c) => sum + (c.valorCredito || 0), 0);
+                    const valorCreditosCOFINS = (dados.creditos.cofins || []).reduce((sum, c) => sum + (c.valorCredito || 0), 0);
+
+                    mensagens.push(`Encontrados ${qtdCreditosPIS} registros de créditos de PIS (Total: R$ ${valorCreditosPIS.toFixed(2)}) e ${qtdCreditosCOFINS} de COFINS (Total: R$ ${valorCreditosCOFINS.toFixed(2)}).`);
+
+                    logDetalhado.registros.creditos = {
+                        pis: {
+                            quantidade: qtdCreditosPIS,
+                            valorTotal: valorCreditosPIS,
+                            amostra: (dados.creditos.pis || []).slice(0, 3)
+                        },
+                        cofins: {
+                            quantidade: qtdCreditosCOFINS,
+                            valorTotal: valorCreditosCOFINS,
+                            amostra: (dados.creditos.cofins || []).slice(0, 3)
+                        }
+                    };
                 }
 
-                // Regime
+                // Resumo de débitos com valores detalhados
+                if (dados.debitos) {
+                    const valorDebitosPIS = (dados.debitos.pis || []).reduce((sum, d) => sum + (d.valorTotalContribuicao || 0), 0);
+                    const valorDebitosCOFINS = (dados.debitos.cofins || []).reduce((sum, d) => sum + (d.valorTotalContribuicao || 0), 0);
+
+                    if (valorDebitosPIS > 0 || valorDebitosCOFINS > 0) {
+                        mensagens.push(`Débitos - PIS: R$ ${valorDebitosPIS.toFixed(2)}, COFINS: R$ ${valorDebitosCOFINS.toFixed(2)}`);
+                        logDetalhado.registros.debitos = {
+                            pis: {
+                                valorTotal: valorDebitosPIS,
+                                quantidade: (dados.debitos.pis || []).length
+                            },
+                            cofins: {
+                                valorTotal: valorDebitosCOFINS,
+                                quantidade: (dados.debitos.cofins || []).length
+                            }
+                        };
+                    }
+                }
+
+                // Regime com detalhamento
                 if (dados.regimes && dados.regimes.pis_cofins) {
                     const regimeDesc = dados.regimes.pis_cofins.codigoIncidencia === '1' ? 
                         'Não-Cumulativo' : (dados.regimes.pis_cofins.codigoIncidencia === '2' ? 'Cumulativo' : 'Misto');
                     mensagens.push(`Regime de apuração PIS/COFINS: ${regimeDesc}.`);
+                    logDetalhado.registros.regime = {
+                        codigoIncidencia: dados.regimes.pis_cofins.codigoIncidencia,
+                        descricao: regimeDesc
+                    };
                 }
                 break;
 
             case 'ecf':
-                // Resumo DRE
+                // Resumo DRE com valores
                 if (dados.dre) {
-                    mensagens.push('Encontrados dados da Demonstração de Resultado do Exercício (DRE).');
+                    const receita = dados.dre.receita_liquida?.valor || 0;
+                    const lucro = dados.dre.lucro_liquido?.valor || 0;
+                    mensagens.push(`Encontrados dados da DRE - Receita Líquida: R$ ${receita.toFixed(2)}, Lucro Líquido: R$ ${lucro.toFixed(2)}.`);
+                    logDetalhado.registros.dre = dados.dre;
                 }
 
-                // Incentivos fiscais
+                // Incentivos fiscais com valores
                 if (dados.incentivosFiscais && dados.incentivosFiscais.length > 0) {
-                    mensagens.push(`Encontrados ${dados.incentivosFiscais.length} registros de incentivos fiscais.`);
+                    const valorTotalIncentivos = dados.incentivosFiscais.reduce((sum, inc) => sum + (inc.valorIncentivo || 0), 0);
+                    mensagens.push(`Encontrados ${dados.incentivosFiscais.length} registros de incentivos fiscais (Total: R$ ${valorTotalIncentivos.toFixed(2)}).`);
+                    logDetalhado.registros.incentivosFiscais = {
+                        quantidade: dados.incentivosFiscais.length,
+                        valorTotal: valorTotalIncentivos,
+                        detalhes: dados.incentivosFiscais
+                    };
                 }
 
-                // Apuração de impostos
+                // Apuração de impostos com valores
                 if (dados.calculoImposto) {
-                    mensagens.push('Encontrados dados de apuração do IRPJ e CSLL.');
+                    const irpj = dados.calculoImposto.irpj;
+                    const csll = dados.calculoImposto.csll;
+                    let detalhesImpostos = [];
+
+                    if (irpj) {
+                        detalhesImpostos.push(`IRPJ: Base R$ ${(irpj.baseCalculoIRPJ || 0).toFixed(2)}, Valor R$ ${(irpj.valorIRPJ || 0).toFixed(2)}`);
+                    }
+                    if (csll) {
+                        detalhesImpostos.push(`CSLL: Base R$ ${(csll.baseCalculoCSLL || 0).toFixed(2)}, Valor R$ ${(csll.valorCSLL || 0).toFixed(2)}`);
+                    }
+
+                    if (detalhesImpostos.length > 0) {
+                        mensagens.push(`Apuração de impostos: ${detalhesImpostos.join(', ')}.`);
+                    }
+
+                    logDetalhado.registros.calculoImposto = dados.calculoImposto;
                 }
                 break;
 
             case 'ecd':
-                // Resumo do balanço
+                // Resumo do balanço com valores
                 if (dados.balancoPatrimonial && dados.balancoPatrimonial.length > 0) {
-                    mensagens.push(`Encontrados ${dados.balancoPatrimonial.length} contas no Balanço Patrimonial.`);
+                    const ativoTotal = dados.balancoPatrimonial
+                        .filter(conta => conta.codigoConta.startsWith('1') && conta.naturezaSaldo === 'D')
+                        .reduce((sum, conta) => sum + (conta.saldoFinal || 0), 0);
+
+                    mensagens.push(`Encontrados ${dados.balancoPatrimonial.length} contas no Balanço Patrimonial (Ativo Total: R$ ${ativoTotal.toFixed(2)}).`);
+                    logDetalhado.registros.balancoPatrimonial = {
+                        quantidade: dados.balancoPatrimonial.length,
+                        ativoTotal: ativoTotal
+                    };
                 }
 
-                // Resumo da DRE
+                // Resumo da DRE com valores
                 if (dados.demonstracaoResultado && dados.demonstracaoResultado.length > 0) {
-                    mensagens.push(`Encontrados ${dados.demonstracaoResultado.length} contas na Demonstração de Resultado.`);
+                    const receita = dados.demonstracaoResultado
+                        .filter(conta => conta.codigoConta.startsWith('3.1') && conta.naturezaSaldo === 'C')
+                        .reduce((sum, conta) => sum + (conta.saldoFinal || 0), 0);
+
+                    mensagens.push(`Encontrados ${dados.demonstracaoResultado.length} contas na DRE (Receita: R$ ${receita.toFixed(2)}).`);
+                    logDetalhado.registros.demonstracaoResultado = {
+                        quantidade: dados.demonstracaoResultado.length,
+                        receita: receita
+                    };
                 }
 
                 // Lançamentos contábeis
                 if (dados.lancamentosContabeis && dados.lancamentosContabeis.length > 0) {
-                    mensagens.push(`Encontrados ${dados.lancamentosContabeis.length} lançamentos contábeis.`);
+                    const valorTotalLancamentos = dados.lancamentosContabeis.reduce((sum, lanc) => sum + (lanc.valorLancamento || 0), 0);
+                    mensagens.push(`Encontrados ${dados.lancamentosContabeis.length} lançamentos contábeis (Valor Total: R$ ${valorTotalLancamentos.toFixed(2)}).`);
+                    logDetalhado.registros.lancamentosContabeis = {
+                        quantidade: dados.lancamentosContabeis.length,
+                        valorTotal: valorTotalLancamentos
+                    };
                 }
                 break;
         }
 
         // Adiciona as mensagens ao log
         mensagens.forEach(mensagem => adicionarLog(mensagem, 'info'));
+
+        // Log detalhado no console para verificação técnica
+        console.group(`IMPORTACAO-CONTROLLER: Dados extraídos detalhados - ${tipo.toUpperCase()}`);
+        console.log('Resumo completo:', logDetalhado);
+        console.groupEnd();
+
+        // Salvar log detalhado para exportação posterior
+        if (!window.logsImportacao) window.logsImportacao = [];
+        window.logsImportacao.push(logDetalhado);
     }
     
     /**
@@ -767,8 +901,45 @@ const ImportacaoController = (function() {
             }
         };
 
+        // CORREÇÃO PRINCIPAL: Verificar e normalizar estrutura de créditos
+        let creditos = {};
+        let debitos = {};
+
+        // Normalizar créditos de múltiplas fontes possíveis
+        if (composicaoTributaria.creditos) {
+            creditos = { ...composicaoTributaria.creditos };
+        }
+
+        // Verificar estruturas alternativas de créditos
+        if (Object.values(creditos).every(val => val === 0 || val === undefined)) {
+            // Tentar buscar em estruturas alternativas
+            const fonteAlternativas = [
+                'creditosPIS', 'creditosCOFINS', 'creditosICMS', 'creditosIPI',
+                'credito_pis', 'credito_cofins', 'credito_icms', 'credito_ipi'
+            ];
+
+            fonteAlternativas.forEach(fonte => {
+                if (composicaoTributaria[fonte] && composicaoTributaria[fonte] > 0) {
+                    const imposto = fonte.replace(/creditos?_?/i, '').toLowerCase();
+                    creditos[imposto] = composicaoTributaria[fonte];
+                }
+            });
+        }
+
+        // Normalizar débitos
+        if (composicaoTributaria.debitos) {
+            debitos = { ...composicaoTributaria.debitos };
+        }
+
+        // Log para diagnóstico
+        console.log('IMPORTACAO-CONTROLLER: Dados recebidos para composição tributária:', {
+            creditosOriginais: composicaoTributaria.creditos,
+            creditosNormalizados: creditos,
+            debitosOriginais: composicaoTributaria.debitos,
+            debitosNormalizados: debitos
+        });
+
         // Preencher débitos
-        const debitos = composicaoTributaria.debitos || {};
         const elementoDebitoPis = document.getElementById('debito-pis');
         const elementoDebitoCofins = document.getElementById('debito-cofins');
         const elementoDebitoIcms = document.getElementById('debito-icms');
@@ -781,19 +952,39 @@ const ImportacaoController = (function() {
         if (elementoDebitoIpi) elementoDebitoIpi.value = formatarMoedaSeguro(debitos.ipi || 0);
         if (elementoDebitoIss) elementoDebitoIss.value = formatarMoedaSeguro(debitos.iss || 0);
 
-        // Preencher créditos
-        const creditos = composicaoTributaria.creditos || {};
+        // CORREÇÃO PRINCIPAL: Preencher créditos com validação robusta
         const elementoCreditoPis = document.getElementById('credito-pis');
         const elementoCreditoCofins = document.getElementById('credito-cofins');
         const elementoCreditoIcms = document.getElementById('credito-icms');
         const elementoCreditoIpi = document.getElementById('credito-ipi');
         const elementoCreditoIss = document.getElementById('credito-iss');
 
-        if (elementoCreditoPis) elementoCreditoPis.value = formatarMoedaSeguro(creditos.pis || 0);
-        if (elementoCreditoCofins) elementoCreditoCofins.value = formatarMoedaSeguro(creditos.cofins || 0);
-        if (elementoCreditoIcms) elementoCreditoIcms.value = formatarMoedaSeguro(creditos.icms || 0);
-        if (elementoCreditoIpi) elementoCreditoIpi.value = formatarMoedaSeguro(creditos.ipi || 0);
-        if (elementoCreditoIss) elementoCreditoIss.value = formatarMoedaSeguro(creditos.iss || 0);
+        // Valores de créditos com fallback
+        const valorCreditoPis = creditos.pis || creditos.PIS || 0;
+        const valorCreditoCofins = creditos.cofins || creditos.COFINS || 0;
+        const valorCreditoIcms = creditos.icms || creditos.ICMS || 0;
+        const valorCreditoIpi = creditos.ipi || creditos.IPI || 0;
+        const valorCreditoIss = 0; // ISS não gera créditos
+
+        if (elementoCreditoPis) {
+            elementoCreditoPis.value = formatarMoedaSeguro(valorCreditoPis);
+            console.log('IMPORTACAO-CONTROLLER: Preenchendo crédito PIS:', valorCreditoPis);
+        }
+        if (elementoCreditoCofins) {
+            elementoCreditoCofins.value = formatarMoedaSeguro(valorCreditoCofins);
+            console.log('IMPORTACAO-CONTROLLER: Preenchendo crédito COFINS:', valorCreditoCofins);
+        }
+        if (elementoCreditoIcms) {
+            elementoCreditoIcms.value = formatarMoedaSeguro(valorCreditoIcms);
+            console.log('IMPORTACAO-CONTROLLER: Preenchendo crédito ICMS:', valorCreditoIcms);
+        }
+        if (elementoCreditoIpi) {
+            elementoCreditoIpi.value = formatarMoedaSeguro(valorCreditoIpi);
+            console.log('IMPORTACAO-CONTROLLER: Preenchendo crédito IPI:', valorCreditoIpi);
+        }
+        if (elementoCreditoIss) {
+            elementoCreditoIss.value = formatarMoedaSeguro(valorCreditoIss);
+        }
 
         // Preencher alíquotas efetivas com validação
         const aliquotas = composicaoTributaria.aliquotasEfetivas || {};
@@ -816,14 +1007,17 @@ const ImportacaoController = (function() {
 
         // Calcular e preencher totais
         const totalDebitos = Object.values(debitos).reduce((sum, val) => sum + (typeof val === 'number' ? val : 0), 0);
-        const totalCreditos = Object.values(creditos).reduce((sum, val) => sum + (typeof val === 'number' ? val : 0), 0);
+        const totalCreditos = valorCreditoPis + valorCreditoCofins + valorCreditoIcms + valorCreditoIpi + valorCreditoIss;
 
         const elementoTotalDebitos = document.getElementById('total-debitos');
         const elementoTotalCreditos = document.getElementById('total-creditos');
         const elementoAliquotaTotal = document.getElementById('aliquota-efetiva-total');
 
         if (elementoTotalDebitos) elementoTotalDebitos.value = formatarMoedaSeguro(totalDebitos);
-        if (elementoTotalCreditos) elementoTotalCreditos.value = formatarMoedaSeguro(totalCreditos);
+        if (elementoTotalCreditos) {
+            elementoTotalCreditos.value = formatarMoedaSeguro(totalCreditos);
+            console.log('IMPORTACAO-CONTROLLER: Total de créditos calculado:', totalCreditos);
+        }
         if (elementoAliquotaTotal) elementoAliquotaTotal.value = formatarAliquota(aliquotas.total || 0);
 
         // Marcar campos como preenchidos pelo SPED
@@ -838,9 +1032,16 @@ const ImportacaoController = (function() {
         marcarCamposSpedPreenchidos(camposPreenchidos);
 
         // Log de confirmação
-        console.log('Painel de Composição Tributária preenchido com sucesso:', {
+        console.log('IMPORTACAO-CONTROLLER: Painel de Composição Tributária preenchido:', {
             totalDebitos: totalDebitos,
             totalCreditos: totalCreditos,
+            creditosIndividuais: {
+                pis: valorCreditoPis,
+                cofins: valorCreditoCofins,
+                icms: valorCreditoIcms,
+                ipi: valorCreditoIpi,
+                iss: valorCreditoIss
+            },
             aliquotaTotal: aliquotas.total || 0
         });
     }

@@ -448,7 +448,7 @@ const SpedExtractor = (function() {
                     iss: 0 // ISS não gera créditos
                 },
 
-                // Alíquotas efetivas calculadas
+                // Alíquotas efetivas calculadas - CORREÇÃO PRINCIPAL
                 aliquotasEfetivas: {},
 
                 // Metadados para validação
@@ -502,19 +502,54 @@ const SpedExtractor = (function() {
             }
         };
 
-        // Calcular alíquotas efetivas baseadas no faturamento real
+        // CORREÇÃO CRÍTICA: Calcular alíquotas efetivas baseadas em (débitos - créditos)/faturamento
         if (faturamentoMensal > 0) {
-            const totalDebitos = Object.values(parametros.composicaoTributaria.debitos)
-                .reduce((sum, val) => sum + (val || 0), 0);
+            const creditosPIS = parametros.composicaoTributaria.creditos.pis;
+            const creditosCOFINS = parametros.composicaoTributaria.creditos.cofins;
+            const creditosICMS = parametros.composicaoTributaria.creditos.icms;
+            const creditosIPI = parametros.composicaoTributaria.creditos.ipi;
+            const creditosISS = 0; // ISS não gera créditos
+
+            const debitosPIS = parametros.composicaoTributaria.debitos.pis;
+            const debitosCOFINS = parametros.composicaoTributaria.debitos.cofins;
+            const debitosICMS = parametros.composicaoTributaria.debitos.icms;
+            const debitosIPI = parametros.composicaoTributaria.debitos.ipi;
+            const debitosISS = parametros.composicaoTributaria.debitos.iss;
+
+            // Cálculo correto: (débitos - créditos) / faturamento
+            const impostoLiquidoPIS = Math.max(0, debitosPIS - creditosPIS);
+            const impostoLiquidoCOFINS = Math.max(0, debitosCOFINS - creditosCOFINS);
+            const impostoLiquidoICMS = Math.max(0, debitosICMS - creditosICMS);
+            const impostoLiquidoIPI = Math.max(0, debitosIPI - creditosIPI);
+            const impostoLiquidoISS = Math.max(0, debitosISS - creditosISS);
+
+            const totalImpostoLiquido = impostoLiquidoPIS + impostoLiquidoCOFINS + 
+                                      impostoLiquidoICMS + impostoLiquidoIPI + impostoLiquidoISS;
 
             parametros.composicaoTributaria.aliquotasEfetivas = {
-                pis: (parametros.composicaoTributaria.debitos.pis / faturamentoMensal) * 100,
-                cofins: (parametros.composicaoTributaria.debitos.cofins / faturamentoMensal) * 100,
-                icms: (parametros.composicaoTributaria.debitos.icms / faturamentoMensal) * 100,
-                ipi: (parametros.composicaoTributaria.debitos.ipi / faturamentoMensal) * 100,
-                iss: (parametros.composicaoTributaria.debitos.iss / faturamentoMensal) * 100,
-                total: (totalDebitos / faturamentoMensal) * 100
+                pis: (impostoLiquidoPIS / faturamentoMensal) * 100,
+                cofins: (impostoLiquidoCOFINS / faturamentoMensal) * 100,
+                icms: (impostoLiquidoICMS / faturamentoMensal) * 100,
+                ipi: (impostoLiquidoIPI / faturamentoMensal) * 100,
+                iss: (impostoLiquidoISS / faturamentoMensal) * 100,
+                total: (totalImpostoLiquido / faturamentoMensal) * 100
             };
+
+            // Log para diagnóstico
+            console.log('SPED-EXTRACTOR: Alíquotas efetivas calculadas:', {
+                faturamentoMensal: faturamentoMensal,
+                debitos: parametros.composicaoTributaria.debitos,
+                creditos: parametros.composicaoTributaria.creditos,
+                impostoLiquido: {
+                    pis: impostoLiquidoPIS,
+                    cofins: impostoLiquidoCOFINS,
+                    icms: impostoLiquidoICMS,
+                    ipi: impostoLiquidoIPI,
+                    iss: impostoLiquidoISS,
+                    total: totalImpostoLiquido
+                },
+                aliquotasEfetivas: parametros.composicaoTributaria.aliquotasEfetivas
+            });
         } else {
             parametros.composicaoTributaria.aliquotasEfetivas = {
                 pis: 0, cofins: 0, icms: 0, ipi: 0, iss: 0, total: 0
@@ -969,14 +1004,68 @@ const SpedExtractor = (function() {
      */
     function calcularCreditosPIS(dadosSped) {
         let valorCreditos = 0;
+        let fonteUtilizada = 'estimado';
 
-        if (dadosSped.creditos && dadosSped.creditos.pis) {
+        // PRIORIDADE 1: Verificar registros M100/M105 do SPED Contribuições
+        if (dadosSped.creditos && dadosSped.creditos.pis && Array.isArray(dadosSped.creditos.pis)) {
             dadosSped.creditos.pis.forEach(credito => {
-                valorCreditos += credito.valorCredito || 0;
+                if (credito.valorCredito && credito.valorCredito > 0) {
+                    valorCreditos += credito.valorCredito;
+                    fonteUtilizada = 'sped_direto';
+                }
+                // Para registros M105 (detalhe de créditos)
+                if (credito.baseCalculoCredito && credito.aliquotaCredito) {
+                    const creditoCalculado = credito.baseCalculoCredito * (credito.aliquotaCredito / 100);
+                    valorCreditos += creditoCalculado;
+                    fonteUtilizada = 'sped_calculado';
+                }
             });
         }
 
-        return valorCreditos;
+        // PRIORIDADE 2: Buscar em registros detalhados M100
+        if (valorCreditos === 0 && dadosSped.creditos) {
+            ['M100', 'M105'].forEach(tipoRegistro => {
+                if (dadosSped.creditos[tipoRegistro] && Array.isArray(dadosSped.creditos[tipoRegistro])) {
+                    dadosSped.creditos[tipoRegistro].forEach(registro => {
+                        if (registro.categoria === 'pis' || registro.codigoCredito) {
+                            if (registro.valorCredito && registro.valorCredito > 0) {
+                                valorCreditos += registro.valorCredito;
+                                fonteUtilizada = 'sped_registro_' + tipoRegistro;
+                            }
+                            if (registro.baseCalculoCredito && registro.aliquotaCredito) {
+                                valorCreditos += registro.baseCalculoCredito * (registro.aliquotaCredito / 100);
+                                fonteUtilizada = 'sped_registro_' + tipoRegistro;
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        // PRIORIDADE 3: Estimativa baseada no regime e faturamento
+        if (valorCreditos === 0) {
+            const regime = determinarRegimeTributario(dadosSped);
+            const faturamentoAnual = calcularFaturamentoMensal(dadosSped) * 12;
+
+            if (regime === 'real' || regime === 'presumido') {
+                const aliquotaPIS = regime === 'real' ? 0.0165 : 0.0065;
+                const baseCalculoEstimada = faturamentoAnual * 0.6; // 60% da receita sujeita a créditos
+                const aproveitamentoEstimado = 0.8; // 80% de aproveitamento típico
+
+                valorCreditos = (baseCalculoEstimada * aliquotaPIS * aproveitamentoEstimado) / 12;
+                fonteUtilizada = 'estimado_' + regime;
+            }
+        }
+
+        // Log detalhado para diagnóstico
+        console.log('SPED-EXTRACTOR: Créditos PIS calculados:', {
+            valorCreditos: valorCreditos,
+            fonteUtilizada: fonteUtilizada,
+            registrosEncontrados: dadosSped.creditos?.pis?.length || 0,
+            regime: determinarRegimeTributario(dadosSped)
+        });
+
+        return valorCreditos; // Valor mensal
     }
 
     /**
@@ -986,14 +1075,68 @@ const SpedExtractor = (function() {
      */
     function calcularCreditosCOFINS(dadosSped) {
         let valorCreditos = 0;
+        let fonteUtilizada = 'estimado';
 
-        if (dadosSped.creditos && dadosSped.creditos.cofins) {
+        // PRIORIDADE 1: Verificar registros M500/M505 do SPED Contribuições
+        if (dadosSped.creditos && dadosSped.creditos.cofins && Array.isArray(dadosSped.creditos.cofins)) {
             dadosSped.creditos.cofins.forEach(credito => {
-                valorCreditos += credito.valorCredito || 0;
+                if (credito.valorCredito && credito.valorCredito > 0) {
+                    valorCreditos += credito.valorCredito;
+                    fonteUtilizada = 'sped_direto';
+                }
+                // Para registros M505 (detalhe de créditos)
+                if (credito.baseCalculoCredito && credito.aliquotaCredito) {
+                    const creditoCalculado = credito.baseCalculoCredito * (credito.aliquotaCredito / 100);
+                    valorCreditos += creditoCalculado;
+                    fonteUtilizada = 'sped_calculado';
+                }
             });
         }
 
-        return valorCreditos;
+        // PRIORIDADE 2: Buscar em registros detalhados M500/M505
+        if (valorCreditos === 0 && dadosSped.creditos) {
+            ['M500', 'M505'].forEach(tipoRegistro => {
+                if (dadosSped.creditos[tipoRegistro] && Array.isArray(dadosSped.creditos[tipoRegistro])) {
+                    dadosSped.creditos[tipoRegistro].forEach(registro => {
+                        if (registro.categoria === 'cofins' || registro.codigoCredito) {
+                            if (registro.valorCredito && registro.valorCredito > 0) {
+                                valorCreditos += registro.valorCredito;
+                                fonteUtilizada = 'sped_registro_' + tipoRegistro;
+                            }
+                            if (registro.baseCalculoCredito && registro.aliquotaCredito) {
+                                valorCreditos += registro.baseCalculoCredito * (registro.aliquotaCredito / 100);
+                                fonteUtilizada = 'sped_registro_' + tipoRegistro;
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        // PRIORIDADE 3: Estimativa baseada no regime e faturamento
+        if (valorCreditos === 0) {
+            const regime = determinarRegimeTributario(dadosSped);
+            const faturamentoAnual = calcularFaturamentoMensal(dadosSped) * 12;
+
+            if (regime === 'real' || regime === 'presumido') {
+                const aliquotaCOFINS = regime === 'real' ? 0.076 : 0.03;
+                const baseCalculoEstimada = faturamentoAnual * 0.6;
+                const aproveitamentoEstimado = 0.8;
+
+                valorCreditos = (baseCalculoEstimada * aliquotaCOFINS * aproveitamentoEstimado) / 12;
+                fonteUtilizada = 'estimado_' + regime;
+            }
+        }
+
+        // Log detalhado para diagnóstico
+        console.log('SPED-EXTRACTOR: Créditos COFINS calculados:', {
+            valorCreditos: valorCreditos,
+            fonteUtilizada: fonteUtilizada,
+            registrosEncontrados: dadosSped.creditos?.cofins?.length || 0,
+            regime: determinarRegimeTributario(dadosSped)
+        });
+
+        return valorCreditos; // Valor mensal
     }
 
     /**
@@ -1004,13 +1147,41 @@ const SpedExtractor = (function() {
     function calcularCreditosICMS(dadosSped) {
         let valorCreditos = 0;
 
-        if (dadosSped.impostos && dadosSped.impostos.icms) {
+        // Primeira fonte: apuração ICMS (registros E110)
+        if (dadosSped.impostos && dadosSped.impostos.icms && Array.isArray(dadosSped.impostos.icms)) {
             dadosSped.impostos.icms.forEach(apuracao => {
                 valorCreditos += apuracao.valorTotalCreditos || 0;
             });
         }
 
-        return valorCreditos;
+        // Segunda fonte: registros analíticos C190 (créditos de entradas)
+        if (valorCreditos === 0 && dadosSped.itensAnaliticos && Array.isArray(dadosSped.itensAnaliticos)) {
+            const itensEntrada = dadosSped.itensAnaliticos.filter(item => 
+                item.categoria === 'icms' && 
+                (item.cfop.startsWith('1') || item.cfop.startsWith('2')) && // Entradas
+                item.valorIcms > 0
+            );
+
+            valorCreditos = itensEntrada.reduce((total, item) => {
+                return total + (item.valorIcms || 0);
+            }, 0);
+        }
+
+        // Estimativa baseada no faturamento se não encontrou dados
+        if (valorCreditos === 0) {
+            const tipoEmpresa = determinarTipoEmpresa(dadosSped);
+
+            if (tipoEmpresa !== 'servicos') {
+                const faturamento = calcularFaturamentoMensal(dadosSped) * 12;
+                const aliquotaMedia = 0.18;
+                const baseCalculoCompras = faturamento * 0.7; // 70% do faturamento em compras
+                const aproveitamentoICMS = 0.85; // 85% de aproveitamento típico
+
+                valorCreditos = baseCalculoCompras * aliquotaMedia * aproveitamentoICMS;
+            }
+        }
+
+        return valorCreditos / 12; // Retorna valor mensal
     }
 
     /**
@@ -1021,127 +1192,327 @@ const SpedExtractor = (function() {
     function calcularCreditosIPI(dadosSped) {
         let valorCreditos = 0;
 
-        if (dadosSped.impostos && dadosSped.impostos.ipi) {
+        // Verificar se é indústria (IPI só se aplica à indústria)
+        const tipoEmpresa = determinarTipoEmpresa(dadosSped);
+        if (tipoEmpresa !== 'industria') {
+            return 0;
+        }
+
+        // Primeira fonte: apuração IPI
+        if (dadosSped.impostos && dadosSped.impostos.ipi && Array.isArray(dadosSped.impostos.ipi)) {
             dadosSped.impostos.ipi.forEach(apuracao => {
                 valorCreditos += apuracao.valorCredito || 0;
             });
         }
 
-        return valorCreditos;
+        // Segunda fonte: itens de entrada com IPI
+        if (valorCreditos === 0 && dadosSped.itens && Array.isArray(dadosSped.itens)) {
+            const itensComIPI = dadosSped.itens.filter(item => 
+                item.valorIpi && item.valorIpi > 0 &&
+                item.cfop && (item.cfop.startsWith('1') || item.cfop.startsWith('2')) // Entradas
+            );
+
+            valorCreditos = itensComIPI.reduce((total, item) => {
+                return total + (item.valorIpi || 0);
+            }, 0);
+        }
+
+        // Estimativa baseada no faturamento
+        if (valorCreditos === 0) {
+            const faturamento = calcularFaturamentoMensal(dadosSped) * 12;
+            const aliquotaMediaIPI = 0.10;
+            const baseCalculoCompras = faturamento * 0.4; // 40% para matérias-primas
+            const aproveitamentoIPI = 0.90; // 90% de aproveitamento
+
+            valorCreditos = baseCalculoCompras * aliquotaMediaIPI * aproveitamentoIPI;
+        }
+
+        return valorCreditos / 12; // Retorna valor mensal
     }
     
     /**
-     * Calcula débitos de PIS com base nos dados SPED
+     * Calcula débitos de PIS considerando TODOS os ajustes extra-apuração
      * @param {Object} dadosSped - Dados extraídos do SPED
-     * @returns {number} Valor dos débitos de PIS
+     * @returns {number} Valor total dos débitos de PIS (incluindo ajustes)
      */
     function calcularDebitosPIS(dadosSped) {
         let valorDebitos = 0;
+        let fonteUtilizada = 'estimado';
+        let detalhamento = {
+            consolidacao: 0,
+            ajustes: 0,
+            detalhamento: 0,
+            total: 0
+        };
 
-        // Primeiro, tenta obter dos registros M200 (apuração PIS)
+        // PRIORIDADE 1: Registro M200 (Consolidação)
         if (dadosSped.debitos && dadosSped.debitos.pis) {
             dadosSped.debitos.pis.forEach(debito => {
-                valorDebitos += debito.valorTotalContribuicao || 0;
+                if (debito.valorTotalContribuicao) {
+                    detalhamento.consolidacao += debito.valorTotalContribuicao;
+                    fonteUtilizada = 'sped_m200';
+                }
             });
         }
 
-        // Se não encontrou, calcula com base na receita e alíquota
-        if (valorDebitos === 0) {
-            const regime = determinarRegimeTributario(dadosSped);
-            let aliquotaPIS = 0;
-
-            if (regime === 'simples') {
-                // No Simples Nacional, PIS é incluído na alíquota única
-                return 0;
-            } else if (regime === 'presumido') {
-                aliquotaPIS = 0.0065; // 0.65%
-            } else {
-                aliquotaPIS = 0.0165; // 1.65%
-            }
-
-            const receitaTributavel = dadosSped.receitaBruta || 
-                                     calcularFaturamentoMensal(dadosSped) * 12;
-            valorDebitos = receitaTributavel * aliquotaPIS;
+        // PRIORIDADE 2: Ajustes M205 (CRÍTICO - valores extra-apuração)
+        if (dadosSped.ajustes && dadosSped.ajustes.pis) {
+            dadosSped.ajustes.pis.forEach(ajuste => {
+                if (ajuste.tipo === 'ajuste_consolidacao') {
+                    const valorAjuste = ajuste.valorAjuste || 0;
+                    // indicadorNatureza: 0=Redutor, 1=Acréscimo
+                    if (ajuste.indicadorNatureza === '1') {
+                        detalhamento.ajustes += valorAjuste;
+                    } else if (ajuste.indicadorNatureza === '0') {
+                        detalhamento.ajustes -= valorAjuste;
+                    }
+                    fonteUtilizada = 'sped_com_ajustes';
+                }
+            });
         }
 
-        return valorDebitos / 12; // Retorna valor mensal
+        // PRIORIDADE 3: Detalhamento M210
+        if (dadosSped.detalhamento && dadosSped.detalhamento.pis) {
+            dadosSped.detalhamento.pis.forEach(det => {
+                if (det.tipo === 'detalhamento_consolidacao') {
+                    detalhamento.detalhamento += (det.valorContribuicao || 0) + 
+                                               (det.valorMulta || 0) + 
+                                               (det.valorJuros || 0);
+                }
+            });
+        }
+
+        // PRIORIDADE 4: Totalização 1100 (mais completa)
+        if (dadosSped.totalizacao && dadosSped.totalizacao.pis) {
+            dadosSped.totalizacao.pis.forEach(tot => {
+                const valorTotal = (tot.valorContribuicaoAPagar || 0) + 
+                                  (tot.valorContribuicaoPaga || 0);
+                if (valorTotal > detalhamento.consolidacao + detalhamento.ajustes) {
+                    detalhamento.total = valorTotal;
+                    fonteUtilizada = 'sped_1100_completo';
+                }
+            });
+        }
+
+        // Determinar valor final (priorizar o mais completo)
+        valorDebitos = Math.max(
+            detalhamento.consolidacao + detalhamento.ajustes + detalhamento.detalhamento,
+            detalhamento.total
+        );
+
+        // Fallback: estimativa se não encontrou dados
+        if (valorDebitos === 0) {
+            const regime = determinarRegimeTributario(dadosSped);
+            const faturamentoAnual = calcularFaturamentoMensal(dadosSped) * 12;
+
+            if (regime === 'simples') {
+                valorDebitos = 0; // PIS incluído na alíquota única
+            } else {
+                const aliquotaPIS = regime === 'real' ? 0.0165 : 0.0065;
+                valorDebitos = (faturamentoAnual * aliquotaPIS) / 12;
+                fonteUtilizada = 'estimado_' + regime;
+            }
+        }
+
+        // Log detalhado
+        console.log('SPED-EXTRACTOR: Débitos PIS calculados:', {
+            valorDebitos: valorDebitos,
+            fonteUtilizada: fonteUtilizada,
+            detalhamento: detalhamento,
+            registrosEncontrados: {
+                m200: dadosSped.debitos?.pis?.length || 0,
+                m205: dadosSped.ajustes?.pis?.length || 0,
+                m210: dadosSped.detalhamento?.pis?.length || 0,
+                totalizacao: dadosSped.totalizacao?.pis?.length || 0
+            }
+        });
+
+        return valorDebitos; // Valor mensal
     }
 
     /**
-     * Calcula débitos de COFINS com base nos dados SPED
+     * Calcula débitos de COFINS considerando TODOS os ajustes extra-apuração
      * @param {Object} dadosSped - Dados extraídos do SPED
-     * @returns {number} Valor dos débitos de COFINS
+     * @returns {number} Valor total dos débitos de COFINS (incluindo ajustes)
      */
     function calcularDebitosCOFINS(dadosSped) {
         let valorDebitos = 0;
+        let fonteUtilizada = 'estimado';
+        let detalhamento = {
+            consolidacao: 0,
+            ajustes: 0,
+            detalhamento: 0,
+            total: 0
+        };
 
-        // Primeiro, tenta obter dos registros M600 (apuração COFINS)
+        // PRIORIDADE 1: Registro M600 (Consolidação)
         if (dadosSped.debitos && dadosSped.debitos.cofins) {
             dadosSped.debitos.cofins.forEach(debito => {
-                valorDebitos += debito.valorTotalContribuicao || 0;
+                if (debito.valorTotalContribuicao) {
+                    detalhamento.consolidacao += debito.valorTotalContribuicao;
+                    fonteUtilizada = 'sped_m600';
+                }
             });
         }
 
-        // Se não encontrou, calcula com base na receita e alíquota
-        if (valorDebitos === 0) {
-            const regime = determinarRegimeTributario(dadosSped);
-            let aliquotaCOFINS = 0;
-
-            if (regime === 'simples') {
-                // No Simples Nacional, COFINS é incluído na alíquota única
-                return 0;
-            } else if (regime === 'presumido') {
-                aliquotaCOFINS = 0.03; // 3%
-            } else {
-                aliquotaCOFINS = 0.076; // 7.6%
-            }
-
-            const receitaTributavel = dadosSped.receitaBruta || 
-                                     calcularFaturamentoMensal(dadosSped) * 12;
-            valorDebitos = receitaTributavel * aliquotaCOFINS;
+        // PRIORIDADE 2: Ajustes M605 (CRÍTICO - valores extra-apuração)
+        if (dadosSped.ajustes && dadosSped.ajustes.cofins) {
+            dadosSped.ajustes.cofins.forEach(ajuste => {
+                if (ajuste.tipo === 'ajuste_consolidacao') {
+                    const valorAjuste = ajuste.valorAjuste || 0;
+                    // indicadorNatureza: 0=Redutor, 1=Acréscimo
+                    if (ajuste.indicadorNatureza === '1') {
+                        detalhamento.ajustes += valorAjuste;
+                    } else if (ajuste.indicadorNatureza === '0') {
+                        detalhamento.ajustes -= valorAjuste;
+                    }
+                    fonteUtilizada = 'sped_com_ajustes';
+                }
+            });
         }
 
-        return valorDebitos / 12; // Retorna valor mensal
+        // PRIORIDADE 3: Detalhamento M610
+        if (dadosSped.detalhamento && dadosSped.detalhamento.cofins) {
+            dadosSped.detalhamento.cofins.forEach(det => {
+                if (det.tipo === 'detalhamento_consolidacao') {
+                    detalhamento.detalhamento += (det.valorContribuicao || 0) + 
+                                               (det.valorMulta || 0) + 
+                                               (det.valorJuros || 0);
+                }
+            });
+        }
+
+        // PRIORIDADE 4: Totalização 1500 (mais completa)
+        if (dadosSped.totalizacao && dadosSped.totalizacao.cofins) {
+            dadosSped.totalizacao.cofins.forEach(tot => {
+                const valorTotal = (tot.valorContribuicaoAPagar || 0) + 
+                                  (tot.valorContribuicaoPaga || 0);
+                if (valorTotal > detalhamento.consolidacao + detalhamento.ajustes) {
+                    detalhamento.total = valorTotal;
+                    fonteUtilizada = 'sped_1500_completo';
+                }
+            });
+        }
+
+        // Determinar valor final (priorizar o mais completo)
+        valorDebitos = Math.max(
+            detalhamento.consolidacao + detalhamento.ajustes + detalhamento.detalhamento,
+            detalhamento.total
+        );
+
+        // Fallback: estimativa se não encontrou dados
+        if (valorDebitos === 0) {
+            const regime = determinarRegimeTributario(dadosSped);
+            const faturamentoAnual = calcularFaturamentoMensal(dadosSped) * 12;
+
+            if (regime === 'simples') {
+                valorDebitos = 0; // COFINS incluído na alíquota única
+            } else {
+                const aliquotaCOFINS = regime === 'real' ? 0.076 : 0.03;
+                valorDebitos = (faturamentoAnual * aliquotaCOFINS) / 12;
+                fonteUtilizada = 'estimado_' + regime;
+            }
+        }
+
+        // Log detalhado
+        console.log('SPED-EXTRACTOR: Débitos COFINS calculados:', {
+            valorDebitos: valorDebitos,
+            fonteUtilizada: fonteUtilizada,
+            detalhamento: detalhamento,
+            registrosEncontrados: {
+                m600: dadosSped.debitos?.cofins?.length || 0,
+                m605: dadosSped.ajustes?.cofins?.length || 0,
+                m610: dadosSped.detalhamento?.cofins?.length || 0,
+                totalizacao: dadosSped.totalizacao?.cofins?.length || 0
+            }
+        });
+
+        return valorDebitos; // Valor mensal
     }
 
     /**
-     * Calcula débitos de ICMS com base nos dados SPED
+     * Calcula débitos de ICMS considerando incentivos e ajustes (E111)
      * @param {Object} dadosSped - Dados extraídos do SPED
-     * @returns {number} Valor dos débitos de ICMS
+     * @returns {number} Valor total dos débitos de ICMS (incluindo ajustes)
      */
     function calcularDebitosICMS(dadosSped) {
         let valorDebitos = 0;
+        let fonteUtilizada = 'estimado';
+        let detalhamento = {
+            apuracao: 0,
+            ajustes: 0,
+            incentivos: 0,
+            total: 0
+        };
 
-        // Obter dos registros E110 (apuração ICMS)
+        // PRIORIDADE 1: Registro E110 (Apuração básica)
         if (dadosSped.impostos && dadosSped.impostos.icms) {
             dadosSped.impostos.icms.forEach(apuracao => {
-                valorDebitos += apuracao.valorTotalDebitos || 0;
+                detalhamento.apuracao += apuracao.valorTotalDebitos || 0;
+                fonteUtilizada = 'sped_e110';
             });
         }
 
-        // Se não encontrou, estima com base no faturamento e alíquota média
+        // PRIORIDADE 2: Ajustes E111 (CRÍTICO - incentivos e correções)
+        if (dadosSped.ajustes && dadosSped.ajustes.icms) {
+            dadosSped.ajustes.icms.forEach(ajuste => {
+                const valorAjuste = ajuste.valorAjuste || 0;
+
+                // Verificar se é incentivo fiscal (valores negativos reduzem débito)
+                if (ajuste.codigoAjuste && ajuste.codigoAjuste.includes('IC')) {
+                    detalhamento.incentivos += valorAjuste; // Incentivos geralmente reduzem
+                } else {
+                    detalhamento.ajustes += valorAjuste; // Outros ajustes
+                }
+                fonteUtilizada = 'sped_com_ajustes_e111';
+            });
+        }
+
+        // Calcular total considerando todos os ajustes
+        detalhamento.total = detalhamento.apuracao + detalhamento.ajustes + detalhamento.incentivos;
+        valorDebitos = Math.max(0, detalhamento.total); // Não pode ser negativo
+
+        // Fallback: estimativa se não encontrou dados
         if (valorDebitos === 0) {
             const tipoEmpresa = determinarTipoEmpresa(dadosSped);
 
             if (tipoEmpresa !== 'servicos') { // ICMS não se aplica a serviços
-                const faturamento = calcularFaturamentoMensal(dadosSped) * 12;
+                const faturamentoAnual = calcularFaturamentoMensal(dadosSped) * 12;
                 const aliquotaMedia = 0.18; // 18% como padrão
                 const baseCalculoPerc = 0.6; // 60% do faturamento sujeito ao ICMS
 
-                valorDebitos = faturamento * baseCalculoPerc * aliquotaMedia;
+                valorDebitos = (faturamentoAnual * baseCalculoPerc * aliquotaMedia) / 12;
+                fonteUtilizada = 'estimado_' + tipoEmpresa;
             }
         }
 
-        return valorDebitos / 12; // Retorna valor mensal
+        // Log detalhado
+        console.log('SPED-EXTRACTOR: Débitos ICMS calculados:', {
+            valorDebitos: valorDebitos,
+            fonteUtilizada: fonteUtilizada,
+            detalhamento: detalhamento,
+            registrosEncontrados: {
+                e110: dadosSped.impostos?.icms?.length || 0,
+                e111: dadosSped.ajustes?.icms?.length || 0
+            }
+        });
+
+        return valorDebitos; // Valor mensal
     }
 
     /**
-     * Calcula débitos de IPI com base nos dados SPED
+     * Calcula débitos de IPI considerando ajustes (E210)
      * @param {Object} dadosSped - Dados extraídos do SPED
-     * @returns {number} Valor dos débitos de IPI
+     * @returns {number} Valor total dos débitos de IPI (incluindo ajustes)
      */
     function calcularDebitosIPI(dadosSped) {
         let valorDebitos = 0;
+        let fonteUtilizada = 'estimado';
+        let detalhamento = {
+            apuracao: 0,
+            ajustes: 0,
+            total: 0
+        };
 
         // IPI só se aplica à indústria
         const tipoEmpresa = determinarTipoEmpresa(dadosSped);
@@ -1149,23 +1520,47 @@ const SpedExtractor = (function() {
             return 0;
         }
 
-        // Obter dos registros de apuração IPI
+        // PRIORIDADE 1: Registro E200 (Apuração IPI)
         if (dadosSped.impostos && dadosSped.impostos.ipi) {
             dadosSped.impostos.ipi.forEach(apuracao => {
-                valorDebitos += apuracao.valorTotalDebitos || 0;
+                detalhamento.apuracao += apuracao.valorTotalDebitos || 0;
+                fonteUtilizada = 'sped_e200';
             });
         }
 
-        // Se não encontrou, estima com base no faturamento
+        // PRIORIDADE 2: Ajustes E210
+        if (dadosSped.ajustes && dadosSped.ajustes.ipi) {
+            dadosSped.ajustes.ipi.forEach(ajuste => {
+                detalhamento.ajustes += ajuste.valorAjuste || 0;
+                fonteUtilizada = 'sped_com_ajustes_e210';
+            });
+        }
+
+        detalhamento.total = detalhamento.apuracao + detalhamento.ajustes;
+        valorDebitos = Math.max(0, detalhamento.total);
+
+        // Fallback: estimativa se não encontrou dados
         if (valorDebitos === 0) {
-            const faturamento = calcularFaturamentoMensal(dadosSped) * 12;
+            const faturamentoAnual = calcularFaturamentoMensal(dadosSped) * 12;
             const aliquotaMedia = 0.10; // 10% como padrão
             const baseCalculoPerc = 0.4; // 40% do faturamento sujeito ao IPI
 
-            valorDebitos = faturamento * baseCalculoPerc * aliquotaMedia;
+            valorDebitos = (faturamentoAnual * baseCalculoPerc * aliquotaMedia) / 12;
+            fonteUtilizada = 'estimado_industria';
         }
 
-        return valorDebitos / 12; // Retorna valor mensal
+        // Log detalhado
+        console.log('SPED-EXTRACTOR: Débitos IPI calculados:', {
+            valorDebitos: valorDebitos,
+            fonteUtilizada: fonteUtilizada,
+            detalhamento: detalhamento,
+            registrosEncontrados: {
+                e200: dadosSped.impostos?.ipi?.length || 0,
+                e210: dadosSped.ajustes?.ipi?.length || 0
+            }
+        });
+
+        return valorDebitos; // Valor mensal
     }
 
     /**

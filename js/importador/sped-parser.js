@@ -12,6 +12,8 @@ const SpedParser = (function() {
             'C190': parseRegistroC190,
             'E110': parseRegistroE110,
             'E111': parseRegistroE111,
+            'E200': parseRegistroE200,  // NOVO: Apuração IPI
+            'E210': parseRegistroE210,  // NOVO: Ajustes IPI
             'C197': parseRegistroC197,
             'H010': parseRegistroH010,
             '0150': parseRegistro0150
@@ -21,13 +23,19 @@ const SpedParser = (function() {
             '0110': parseRegistro0110,
             'M100': parseRegistroM100,
             'M105': parseRegistroM105,
-            'M200': parseRegistroM200, // Adicionar registro de débito PIS
-            'M210': parseRegistroM210,
+            'M200': parseRegistroM200,
+            'M205': parseRegistroM205,  // NOVO: Ajustes PIS
+            'M210': parseRegistroM210,  // NOVO: Detalhamento PIS
             'M500': parseRegistroM500,
             'M505': parseRegistroM505,
-            'M600': parseRegistroM600, // Adicionar registro de débito COFINS
+            'M600': parseRegistroM600,
+            'M605': parseRegistroM605,  // NOVO: Ajustes COFINS
+            'M610': parseRegistroM610,  // NOVO: Detalhamento COFINS
             'M400': parseRegistroM400,
-            'M800': parseRegistroM800
+            'M800': parseRegistroM800,
+            '1001': parseRegistro1001,  // NOVO: Registro de Encerramento
+            '1100': parseRegistro1100,  // NOVO: Totalização PIS
+            '1500': parseRegistro1500   // NOVO: Totalização COFINS
         },
         ecf: {
             '0000': parseRegistro0000ECF,
@@ -586,17 +594,6 @@ const SpedParser = (function() {
             return null;
         }
     }
-
-    function parseRegistroM210(campos) {
-        return {
-            tipo: 'credito',
-            categoria: 'cofins',
-            codigoCredito: campos[2],
-            valorBaseCalculoTotal: parseFloat(campos[4].replace(',', '.')),
-            aliquotaCofins: parseFloat(campos[5].replace(',', '.')),
-            valorCredito: parseFloat(campos[6].replace(',', '.'))
-        };
-    }
     
     function parseRegistro0110(campos) {
         return {
@@ -830,6 +827,200 @@ const SpedParser = (function() {
             saldoFinal: parseFloat(campos[7].replace(',', '.')) || 0,
             naturezaSaldo: campos[8] // D=Devedor, C=Credor
         };
+    }
+    
+    // Registro E200 - Apuração do IPI
+    function parseRegistroE200(campos) {
+        if (!validarEstruturaRegistro(campos, 10)) {
+            console.warn('Registro E200 com estrutura insuficiente');
+            return null;
+        }
+
+        try {
+            return {
+                tipo: 'imposto',
+                categoria: 'ipi',
+                valorTotalDebitos: converterValorMonetario(validarCampo(campos, 4, '0')),
+                valorTotalCreditos: converterValorMonetario(validarCampo(campos, 5, '0')),
+                valorAPagar: converterValorMonetario(validarCampo(campos, 8, '0')),
+                saldoCredorAnterior: converterValorMonetario(validarCampo(campos, 6, '0'))
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro E200:', erro.message);
+            return null;
+        }
+    }
+
+    // Registro E210 - Ajuste da Apuração do IPI
+    function parseRegistroE210(campos) {
+        if (!validarEstruturaRegistro(campos, 5)) {
+            console.warn('Registro E210 com estrutura insuficiente');
+            return null;
+        }
+
+        try {
+            return {
+                tipo: 'ajuste',
+                categoria: 'ipi',
+                codigoAjuste: validarCampo(campos, 3),
+                descricaoComplementar: validarCampo(campos, 4),
+                valorAjuste: converterValorMonetario(validarCampo(campos, 5, '0'))
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro E210:', erro.message);
+            return null;
+        }
+    }
+
+    // Registro M205 - Ajustes da Consolidação da Contribuição PIS
+    function parseRegistroM205(campos) {
+        if (!validarEstruturaRegistro(campos, 8)) {
+            console.warn('Registro M205 com estrutura insuficiente');
+            return null;
+        }
+
+        try {
+            return {
+                tipo: 'ajuste_consolidacao',
+                categoria: 'pis',
+                codigoAjuste: validarCampo(campos, 3),
+                valorAjuste: converterValorMonetario(validarCampo(campos, 4, '0')),
+                codigoReceita: validarCampo(campos, 5),
+                indicadorNatureza: validarCampo(campos, 6), // 0=Redutor, 1=Acréscimo
+                valorDeducao: converterValorMonetario(validarCampo(campos, 7, '0'))
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro M205:', erro.message);
+            return null;
+        }
+    }
+
+    // Registro M210 - Detalhamento da Consolidação da Contribuição PIS
+    function parseRegistroM210(campos) {
+        if (!validarEstruturaRegistro(campos, 8)) {
+            console.warn('Registro M210 com estrutura insuficiente');
+            return null;
+        }
+
+        try {
+            return {
+                tipo: 'detalhamento_consolidacao',
+                categoria: 'pis',
+                codigoReceita: validarCampo(campos, 3),
+                valorContribuicao: converterValorMonetario(validarCampo(campos, 4, '0')),
+                valorMulta: converterValorMonetario(validarCampo(campos, 5, '0')),
+                valorJuros: converterValorMonetario(validarCampo(campos, 6, '0')),
+                dataVencimento: validarCampo(campos, 7)
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro M210:', erro.message);
+            return null;
+        }
+    }
+
+    // Registro M605 - Ajustes da Consolidação da Contribuição COFINS
+    function parseRegistroM605(campos) {
+        if (!validarEstruturaRegistro(campos, 8)) {
+            console.warn('Registro M605 com estrutura insuficiente');
+            return null;
+        }
+
+        try {
+            return {
+                tipo: 'ajuste_consolidacao',
+                categoria: 'cofins',
+                codigoAjuste: validarCampo(campos, 3),
+                valorAjuste: converterValorMonetario(validarCampo(campos, 4, '0')),
+                codigoReceita: validarCampo(campos, 5),
+                indicadorNatureza: validarCampo(campos, 6), // 0=Redutor, 1=Acréscimo
+                valorDeducao: converterValorMonetario(validarCampo(campos, 7, '0'))
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro M605:', erro.message);
+            return null;
+        }
+    }
+
+    // Registro M610 - Detalhamento da Consolidação da Contribuição COFINS
+    function parseRegistroM610(campos) {
+        if (!validarEstruturaRegistro(campos, 8)) {
+            console.warn('Registro M610 com estrutura insuficiente');
+            return null;
+        }
+
+        try {
+            return {
+                tipo: 'detalhamento_consolidacao',
+                categoria: 'cofins',
+                codigoReceita: validarCampo(campos, 3),
+                valorContribuicao: converterValorMonetario(validarCampo(campos, 4, '0')),
+                valorMulta: converterValorMonetario(validarCampo(campos, 5, '0')),
+                valorJuros: converterValorMonetario(validarCampo(campos, 6, '0')),
+                dataVencimento: validarCampo(campos, 7)
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro M610:', erro.message);
+            return null;
+        }
+    }
+
+    // Registro 1001 - Registro de Encerramento
+    function parseRegistro1001(campos) {
+        try {
+            return {
+                tipo: 'encerramento',
+                indicadorMovimento: validarCampo(campos, 2), // 0=Bloco sem dados, 1=Bloco com dados
+                valorTotalCreditos: converterValorMonetario(validarCampo(campos, 3, '0')),
+                valorTotalDebitos: converterValorMonetario(validarCampo(campos, 4, '0'))
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro 1001:', erro.message);
+            return null;
+        }
+    }
+
+    // Registro 1100 - Totalização das Contribuições PIS
+    function parseRegistro1100(campos) {
+        if (!validarEstruturaRegistro(campos, 10)) {
+            console.warn('Registro 1100 com estrutura insuficiente');
+            return null;
+        }
+
+        try {
+            return {
+                tipo: 'totalizacao',
+                categoria: 'pis',
+                valorContribuicaoAPagar: converterValorMonetario(validarCampo(campos, 3, '0')),
+                valorCredutoCompensado: converterValorMonetario(validarCampo(campos, 4, '0')),
+                valorContribuicaoPaga: converterValorMonetario(validarCampo(campos, 5, '0')),
+                saldoCredorPeriodo: converterValorMonetario(validarCampo(campos, 6, '0'))
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro 1100:', erro.message);
+            return null;
+        }
+    }
+
+    // Registro 1500 - Totalização das Contribuições COFINS
+    function parseRegistro1500(campos) {
+        if (!validarEstruturaRegistro(campos, 10)) {
+            console.warn('Registro 1500 com estrutura insuficiente');
+            return null;
+        }
+
+        try {
+            return {
+                tipo: 'totalizacao',
+                categoria: 'cofins',
+                valorContribuicaoAPagar: converterValorMonetario(validarCampo(campos, 3, '0')),
+                valorCredutoCompensado: converterValorMonetario(validarCampo(campos, 4, '0')),
+                valorContribuicaoPaga: converterValorMonetario(validarCampo(campos, 5, '0')),
+                saldoCredorPeriodo: converterValorMonetario(validarCampo(campos, 6, '0'))
+            };
+        } catch (erro) {
+            console.warn('Erro ao processar registro 1500:', erro.message);
+            return null;
+        }
     }
 
     /**
