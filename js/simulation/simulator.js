@@ -204,17 +204,35 @@ function gerarMemoriaCalculo(dados, impactoBase, projecaoTemporal) {
 function integrarDadosSpedNaEstruturaPlana(dadosPlanos, dadosSpedImportados) {
     const composicao = dadosSpedImportados.composicaoTributaria;
     
-    // Adicionar débitos e créditos específicos
+    // CORREÇÃO PRINCIPAL: Integrar créditos com validação robusta
+    console.log('SIMULATOR: Integrando créditos do SPED:', composicao.creditos);
+    
+    // Adicionar débitos
     dadosPlanos.debitosPIS = composicao.debitos.pis || 0;
     dadosPlanos.debitosCOFINS = composicao.debitos.cofins || 0;
     dadosPlanos.debitosICMS = composicao.debitos.icms || 0;
     dadosPlanos.debitosIPI = composicao.debitos.ipi || 0;
     dadosPlanos.debitosISS = composicao.debitos.iss || 0;
     
-    dadosPlanos.creditosPIS = composicao.creditos.pis || 0;
-    dadosPlanos.creditosCOFINS = composicao.creditos.cofins || 0;
-    dadosPlanos.creditosICMS = composicao.creditos.icms || 0;
-    dadosPlanos.creditosIPI = composicao.creditos.ipi || 0;
+    // CORREÇÃO PRINCIPAL: Adicionar créditos com múltiplas verificações
+    const creditosPIS = composicao.creditos.pis || composicao.creditos.PIS || 0;
+    const creditosCOFINS = composicao.creditos.cofins || composicao.creditos.COFINS || 0;
+    const creditosICMS = composicao.creditos.icms || composicao.creditos.ICMS || 0;
+    const creditosIPI = composicao.creditos.ipi || composicao.creditos.IPI || 0;
+    
+    dadosPlanos.creditosPIS = creditosPIS;
+    dadosPlanos.creditosCOFINS = creditosCOFINS;
+    dadosPlanos.creditosICMS = creditosICMS;
+    dadosPlanos.creditosIPI = creditosIPI;
+    
+    // Log para diagnóstico
+    console.log('SIMULATOR: Créditos integrados na estrutura plana:', {
+        creditosPIS: creditosPIS,
+        creditosCOFINS: creditosCOFINS,
+        creditosICMS: creditosICMS,
+        creditosIPI: creditosIPI,
+        fonteOriginal: composicao.creditos
+    });
     
     // Sobrescrever alíquota se disponível dados reais
     if (composicao.aliquotasEfetivas.total > 0) {
@@ -226,7 +244,7 @@ function integrarDadosSpedNaEstruturaPlana(dadosPlanos, dadosSpedImportados) {
     dadosPlanos.temDadosSped = true;
     dadosPlanos.fonteDados = 'sped';
     
-    console.log('Dados do SPED integrados na estrutura plana para cálculos');
+    console.log('SIMULATOR: Dados do SPED integrados na estrutura plana para cálculos');
 }
 
 /**

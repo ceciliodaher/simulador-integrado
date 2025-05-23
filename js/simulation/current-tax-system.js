@@ -280,6 +280,78 @@ window.CurrentTaxSystem = (function() {
 
         return result;
     }
+    
+    /**
+     * Calcula impostos do sistema atual integrando dados do SPED quando disponíveis
+     * @param {Object} params - Parâmetros da operação em formato plano
+     * @param {Object} dadosSped - Dados extraídos do SPED (opcional)
+     * @returns {Object} Objeto contendo todos os impostos calculados
+     */
+    function calcularTodosImpostosAtuaisComSped(params, dadosSped = null) {
+        // Verificar se os parâmetros estão em formato plano
+        if (params.empresa !== undefined || params.parametrosFiscais !== undefined) {
+            console.error('calcularTodosImpostosAtuaisComSped recebeu estrutura aninhada. Utilize DataManager.converterParaEstruturaPlana()');
+            if (window.DataManager && typeof window.DataManager.converterParaEstruturaPlana === 'function') {
+                params = window.DataManager.converterParaEstruturaPlana(params);
+            } else {
+                throw new Error('Estrutura de dados incompatível e DataManager não disponível para conversão');
+            }
+        }
+
+        // Se há dados do SPED, priorizar os valores reais
+        if (dadosSped && dadosSped.composicaoTributaria) {
+            const composicao = dadosSped.composicaoTributaria;
+
+            // Log para diagnóstico
+            console.log('CURRENT-TAX-SYSTEM: Utilizando dados reais do SPED para cálculo de impostos');
+
+            const result = {
+                pis: Math.max(0, (composicao.debitos.pis || 0) - (composicao.creditos.pis || 0)),
+                cofins: Math.max(0, (composicao.debitos.cofins || 0) - (composicao.creditos.cofins || 0)),
+                icms: Math.max(0, (composicao.debitos.icms || 0) - (composicao.creditos.icms || 0)),
+                ipi: Math.max(0, (composicao.debitos.ipi || 0) - (composicao.creditos.ipi || 0)),
+                iss: Math.max(0, (composicao.debitos.iss || 0) - (composicao.creditos.iss || 0)),
+                // Dados brutos para referência
+                debitos: {
+                    pis: composicao.debitos.pis || 0,
+                    cofins: composicao.debitos.cofins || 0,
+                    icms: composicao.debitos.icms || 0,
+                    ipi: composicao.debitos.ipi || 0,
+                    iss: composicao.debitos.iss || 0
+                },
+                creditos: {
+                    pis: composicao.creditos.pis || 0,
+                    cofins: composicao.creditos.cofins || 0,
+                    icms: composicao.creditos.icms || 0,
+                    ipi: composicao.creditos.ipi || 0,
+                    iss: composicao.creditos.iss || 0
+                },
+                fonte: 'sped'
+            };
+
+            // Cálculo total
+            result.total = result.pis + result.cofins + result.icms + result.ipi + result.iss;
+
+            // Log detalhado
+            console.log('CURRENT-TAX-SYSTEM: Impostos calculados com dados SPED:', {
+                debitos: result.debitos,
+                creditos: result.creditos,
+                impostoLiquido: {
+                    pis: result.pis,
+                    cofins: result.cofins,
+                    icms: result.icms,
+                    ipi: result.ipi,
+                    iss: result.iss,
+                    total: result.total
+                }
+            });
+
+            return result;
+        }
+
+        // Caso contrário, usar o método tradicional
+        return calcularTodosImpostosAtuais(params);
+    }
 
     /**
      * Wrapper de compatibilidade que aceita tanto estrutura plana quanto aninhada
