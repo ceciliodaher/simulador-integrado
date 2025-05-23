@@ -256,17 +256,25 @@ const SimulacaoPrincipalController = {
             'ipi-base-calc',
             'ipi-perc-credito',
             'aliquota-ipi',
-            'incentivo-icms'
+            'aliquota-iss',
+            'incentivo-icms',
+            'aliquota-simples',
+            'pis-aliquota',
+            'cofins-aliquota'
         ];
-        
+
         camposTributarios.forEach(id => {
             const campo = document.getElementById(id);
             if (campo) {
-                campo.addEventListener('input', () => this.calcularCreditosTributarios());
-                campo.addEventListener('change', () => this.calcularCreditosTributarios());
+                campo.addEventListener('input', () => {
+                    this.calcularCreditosTributarios();
+                });
+                campo.addEventListener('change', () => {
+                    this.calcularCreditosTributarios();
+                });
             }
         });
-        
+
         // Configuração inicial
         this._ajustarAliquotasPisCofins();
         this.calcularCreditosTributarios();
@@ -274,63 +282,252 @@ const SimulacaoPrincipalController = {
     
     /**
      * Calcula os créditos tributários com base nos dados do formulário
+     * @returns {Object} Objeto com créditos individuais por imposto
      */
     calcularCreditosTributarios: function() {
         const faturamento = this._extrairValorNumerico(document.getElementById('faturamento').value) || 0;
-        
+
+        // Objeto para armazenar resultados individuais
+        const resultados = {
+            creditos: {
+                pis: 0,
+                cofins: 0,
+                icms: 0,
+                ipi: 0,
+                iss: 0
+            },
+            total: 0
+        };
+
         // Calcular créditos de PIS/COFINS
         if (document.getElementById('pis-cofins-regime').value === 'nao-cumulativo') {
             const pisCofinsBaseCalc = parseFloat(document.getElementById('pis-cofins-base-calc').value) / 100 || 0;
             const pisCofinsPercCredito = parseFloat(document.getElementById('pis-cofins-perc-credito').value) / 100 || 0;
             const aliquotaPIS = parseFloat(document.getElementById('pis-aliquota').value) / 100 || 0;
             const aliquotaCOFINS = parseFloat(document.getElementById('cofins-aliquota').value) / 100 || 0;
-            
-            const creditosPisCofins = faturamento * pisCofinsBaseCalc * (aliquotaPIS + aliquotaCOFINS) * pisCofinsPercCredito;
-            document.getElementById('creditos-pis-cofins-calc').value = this.formatarMoeda(creditosPisCofins);
+
+            const creditosPisCofinsTotal = faturamento * pisCofinsBaseCalc * (aliquotaPIS + aliquotaCOFINS) * pisCofinsPercCredito;
+
+            // Distribuir proporcionalmente entre PIS e COFINS
+            const totalAliquotas = aliquotaPIS + aliquotaCOFINS;
+            if (totalAliquotas > 0) {
+                resultados.creditos.pis = creditosPisCofinsTotal * (aliquotaPIS / totalAliquotas);
+                resultados.creditos.cofins = creditosPisCofinsTotal * (aliquotaCOFINS / totalAliquotas);
+            }
+
+            document.getElementById('creditos-pis-cofins-calc').value = this.formatarMoeda(creditosPisCofinsTotal);
         } else {
             document.getElementById('creditos-pis-cofins-calc').value = this.formatarMoeda(0);
         }
-        
+
         // Calcular créditos de ICMS
         const icmsBaseCalc = parseFloat(document.getElementById('icms-base-calc').value) / 100 || 0;
         const icmsPercCredito = parseFloat(document.getElementById('icms-perc-credito').value) / 100 || 0;
         const aliquotaICMS = parseFloat(document.getElementById('aliquota-icms').value) / 100 || 0;
-        
-        const creditosICMS = faturamento * icmsBaseCalc * aliquotaICMS * icmsPercCredito;
-        document.getElementById('creditos-icms-calc').value = this.formatarMoeda(creditosICMS);
-        
+
+        resultados.creditos.icms = faturamento * icmsBaseCalc * aliquotaICMS * icmsPercCredito;
+        document.getElementById('creditos-icms-calc').value = this.formatarMoeda(resultados.creditos.icms);
+
         // Calcular créditos de IPI
         const ipiBaseCalc = parseFloat(document.getElementById('ipi-base-calc').value) / 100 || 0;
         const ipiPercCredito = parseFloat(document.getElementById('ipi-perc-credito').value) / 100 || 0;
         const aliquotaIPI = parseFloat(document.getElementById('aliquota-ipi').value) / 100 || 0;
-        
-        const creditosIPI = faturamento * ipiBaseCalc * aliquotaIPI * ipiPercCredito;
-        document.getElementById('creditos-ipi-calc').value = this.formatarMoeda(creditosIPI);
-        
-        // Calcular total de créditos
+
+        resultados.creditos.ipi = faturamento * ipiBaseCalc * aliquotaIPI * ipiPercCredito;
+        document.getElementById('creditos-ipi-calc').value = this.formatarMoeda(resultados.creditos.ipi);
+
+        // ISS não gera créditos
+        resultados.creditos.iss = 0;
+
+        // Calcular total de créditos considerando o tipo de operação
+        const tipoOperacao = document.getElementById('tipo-operacao').value;
+        const tipoEmpresa = document.getElementById('tipo-empresa').value;
+
         let creditosTotal = 0;
-        
+
         // Adicionar créditos PIS/COFINS se estiver no regime não-cumulativo
         if (document.getElementById('pis-cofins-regime').value === 'nao-cumulativo') {
-            creditosTotal += parseFloat(this._extrairValorNumerico(document.getElementById('creditos-pis-cofins-calc').value)) || 0;
+            creditosTotal += resultados.creditos.pis + resultados.creditos.cofins;
         }
-        
-        // Adicionar créditos ICMS e IPI conforme o tipo de operação
-        const tipoOperacao = document.getElementById('tipo-operacao').value;
-        
-        if (tipoOperacao === 'comercial' || tipoOperacao === 'industrial') {
-            creditosTotal += parseFloat(this._extrairValorNumerico(document.getElementById('creditos-icms-calc').value)) || 0;
+
+        // Adicionar créditos ICMS e IPI conforme o tipo de empresa
+        if (tipoEmpresa === 'comercio' || tipoEmpresa === 'industria') {
+            creditosTotal += resultados.creditos.icms;
         }
-        
-        if (tipoOperacao === 'industrial') {
-            creditosTotal += parseFloat(this._extrairValorNumerico(document.getElementById('creditos-ipi-calc').value)) || 0;
+
+        if (tipoEmpresa === 'industria') {
+            creditosTotal += resultados.creditos.ipi;
         }
-        
+
+        resultados.total = creditosTotal;
+
         // Atualizar o campo de créditos totais
         document.getElementById('creditos').value = this.formatarMoeda(creditosTotal);
-        
+
+        // Atualizar painel de composição tributária detalhada
+        this.atualizarPainelComposicaoTributaria(resultados);
+
         // Recalcular a alíquota efetiva considerando os créditos
         this.calcularAliquotaEfetiva();
+
+        return resultados;
+    },
+    
+    /**
+     * Atualiza o painel de Composição Tributária Detalhada
+     * @param {Object} creditosResultados - Resultados dos créditos calculados
+     */
+    atualizarPainelComposicaoTributaria: function(creditosResultados) {
+        const faturamento = this._extrairValorNumerico(document.getElementById('faturamento').value) || 0;
+
+        if (faturamento === 0) {
+            // Limpar todos os campos se não há faturamento
+            this._limparPainelComposicaoTributaria();
+            return;
+        }
+
+        const tipoEmpresa = document.getElementById('tipo-empresa').value;
+        const regime = document.getElementById('regime').value;
+        const pisCofinsRegime = document.getElementById('pis-cofins-regime').value;
+
+        // Objeto para armazenar débitos e créditos
+        const composicao = {
+            debitos: { pis: 0, cofins: 0, icms: 0, ipi: 0, iss: 0 },
+            creditos: creditosResultados ? creditosResultados.creditos : { pis: 0, cofins: 0, icms: 0, ipi: 0, iss: 0 },
+            aliquotasEfetivas: { pis: 0, cofins: 0, icms: 0, ipi: 0, iss: 0, total: 0 }
+        };
+
+        // Calcular débitos por imposto
+        if (regime === 'simples') {
+            // No Simples Nacional, considerar alíquota única
+            const aliquotaSimples = parseFloat(document.getElementById('aliquota-simples').value) / 100 || 0;
+            const debitoTotal = faturamento * aliquotaSimples;
+
+            // Distribuir proporcionalmente (estimativa)
+            composicao.debitos.pis = debitoTotal * 0.05; // ~5% do total
+            composicao.debitos.cofins = debitoTotal * 0.23; // ~23% do total
+            composicao.debitos.icms = debitoTotal * 0.72; // ~72% do total
+        } else {
+            // PIS
+            const aliquotaPIS = parseFloat(document.getElementById('pis-aliquota').value) / 100 || 0;
+            composicao.debitos.pis = faturamento * aliquotaPIS;
+
+            // COFINS
+            const aliquotaCOFINS = parseFloat(document.getElementById('cofins-aliquota').value) / 100 || 0;
+            composicao.debitos.cofins = faturamento * aliquotaCOFINS;
+
+            // ICMS (se aplicável)
+            if (tipoEmpresa === 'comercio' || tipoEmpresa === 'industria') {
+                let aliquotaICMS = parseFloat(document.getElementById('aliquota-icms').value) / 100 || 0;
+
+                // Aplicar incentivo fiscal se existir
+                if (document.getElementById('possui-incentivo-icms').checked) {
+                    const incentivo = parseFloat(document.getElementById('incentivo-icms').value) / 100 || 0;
+                    aliquotaICMS = aliquotaICMS * (1 - incentivo);
+                }
+
+                composicao.debitos.icms = faturamento * aliquotaICMS;
+            }
+
+            // IPI (se aplicável)
+            if (tipoEmpresa === 'industria') {
+                const aliquotaIPI = parseFloat(document.getElementById('aliquota-ipi').value) / 100 || 0;
+                composicao.debitos.ipi = faturamento * aliquotaIPI;
+            }
+
+            // ISS (se aplicável)
+            if (tipoEmpresa === 'servicos') {
+                const aliquotaISS = parseFloat(document.getElementById('aliquota-iss').value) / 100 || 0;
+                composicao.debitos.iss = faturamento * aliquotaISS;
+            }
+        }
+
+        // Calcular alíquotas efetivas
+        Object.keys(composicao.debitos).forEach(imposto => {
+            const debito = composicao.debitos[imposto];
+            const credito = composicao.creditos[imposto] || 0;
+            composicao.aliquotasEfetivas[imposto] = ((debito - credito) / faturamento) * 100;
+        });
+
+        // Calcular totais
+        const totalDebitos = Object.values(composicao.debitos).reduce((sum, val) => sum + val, 0);
+        const totalCreditos = Object.values(composicao.creditos).reduce((sum, val) => sum + val, 0);
+        composicao.aliquotasEfetivas.total = ((totalDebitos - totalCreditos) / faturamento) * 100;
+
+        // Atualizar campos na interface
+        this._atualizarCamposPainelDetalhado(composicao, totalDebitos, totalCreditos);
+    },
+
+    /**
+     * Atualiza os campos do painel detalhado na interface
+     * @param {Object} composicao - Dados da composição tributária
+     * @param {number} totalDebitos - Total de débitos
+     * @param {number} totalCreditos - Total de créditos
+     * @private
+     */
+    _atualizarCamposPainelDetalhado: function(composicao, totalDebitos, totalCreditos) {
+        // Atualizar débitos
+        Object.keys(composicao.debitos).forEach(imposto => {
+            const elemento = document.getElementById(`debito-${imposto}`);
+            if (elemento) {
+                elemento.value = this.formatarMoeda(composicao.debitos[imposto]);
+            }
+        });
+
+        // Atualizar créditos
+        Object.keys(composicao.creditos).forEach(imposto => {
+            const elemento = document.getElementById(`credito-${imposto}`);
+            if (elemento) {
+                elemento.value = this.formatarMoeda(composicao.creditos[imposto]);
+            }
+        });
+
+        // Atualizar alíquotas efetivas
+        Object.keys(composicao.aliquotasEfetivas).forEach(imposto => {
+            const elemento = document.getElementById(`aliquota-efetiva-${imposto}`);
+            if (elemento) {
+                elemento.value = composicao.aliquotasEfetivas[imposto].toFixed(3);
+            }
+        });
+
+        // Atualizar totais
+        const elementoTotalDebitos = document.getElementById('total-debitos');
+        if (elementoTotalDebitos) {
+            elementoTotalDebitos.value = this.formatarMoeda(totalDebitos);
+        }
+
+        const elementoTotalCreditos = document.getElementById('total-creditos');
+        if (elementoTotalCreditos) {
+            elementoTotalCreditos.value = this.formatarMoeda(totalCreditos);
+        }
+    },
+
+    /**
+     * Limpa todos os campos do painel de composição tributária
+     * @private
+     */
+    _limparPainelComposicaoTributaria: function() {
+        const impostos = ['pis', 'cofins', 'icms', 'ipi', 'iss'];
+        const tipos = ['debito', 'credito', 'aliquota-efetiva'];
+
+        impostos.forEach(imposto => {
+            tipos.forEach(tipo => {
+                const elemento = document.getElementById(`${tipo}-${imposto}`);
+                if (elemento) {
+                    elemento.value = tipo === 'aliquota-efetiva' ? '0.000' : this.formatarMoeda(0);
+                }
+            });
+        });
+
+        // Limpar totais
+        const elementoTotalDebitos = document.getElementById('total-debitos');
+        if (elementoTotalDebitos) elementoTotalDebitos.value = this.formatarMoeda(0);
+
+        const elementoTotalCreditos = document.getElementById('total-creditos');
+        if (elementoTotalCreditos) elementoTotalCreditos.value = this.formatarMoeda(0);
+
+        const elementoAliquotaTotal = document.getElementById('aliquota-efetiva-total');
+        if (elementoAliquotaTotal) elementoAliquotaTotal.value = '0.000';
     },
     
     /**
@@ -440,44 +637,46 @@ const SimulacaoPrincipalController = {
     _atualizarVisualizacaoCampos: function(tipo) {
         if (tipo === 'regime') {
             const regime = document.getElementById('regime').value;
-            
+
             // Campos específicos do Simples Nacional
             const camposSimples = document.getElementById('campos-simples');
             if (camposSimples) {
                 camposSimples.style.display = regime === 'simples' ? 'block' : 'none';
             }
-            
+
             // Campos específicos de PIS/COFINS para regimes Presumido/Real
-            const camposPisCofins = document.getElementById('campos-pis-cofins');
+            const camposPisCofins = document.getElementById('campos-lucro');
             if (camposPisCofins) {
                 camposPisCofins.style.display = (regime === 'presumido' || regime === 'real') ? 'block' : 'none';
             }
-            
-            // Recalcular alíquota
+
+            // Recalcular alíquota e atualizar painel
             this.calcularAliquotaEfetiva();
+            this.calcularCreditosTributarios();
         }
         else if (tipo === 'tipo-operacao') {
             const tipoOperacao = document.getElementById('tipo-operacao').value;
-            
+            const tipoEmpresa = document.getElementById('tipo-empresa').value;
+
             // Campos de ICMS (para comércio e indústria)
-            const camposIcms = document.querySelectorAll('.campos-icms');
+            const camposIcms = document.querySelectorAll('.campos-icms, #campos-icms');
             camposIcms.forEach(campo => {
-                campo.style.display = (tipoOperacao === 'comercial' || tipoOperacao === 'industrial') ? 'block' : 'none';
+                campo.style.display = (tipoEmpresa === 'comercio' || tipoEmpresa === 'industria') ? 'block' : 'none';
             });
-            
+
             // Campos de IPI (apenas para indústria)
-            const camposIpi = document.querySelectorAll('.campos-ipi');
+            const camposIpi = document.querySelectorAll('.campos-ipi, #campos-ipi');
             camposIpi.forEach(campo => {
-                campo.style.display = tipoOperacao === 'industrial' ? 'block' : 'none';
+                campo.style.display = tipoEmpresa === 'industria' ? 'block' : 'none';
             });
-            
+
             // Campos de ISS (apenas para serviços)
-            const camposIss = document.querySelectorAll('.campos-iss');
+            const camposIss = document.querySelectorAll('.campos-iss, #campos-iss');
             camposIss.forEach(campo => {
-                campo.style.display = tipoOperacao === 'servicos' ? 'block' : 'none';
+                campo.style.display = tipoEmpresa === 'servicos' ? 'block' : 'none';
             });
-            
-            // Recalcular alíquota e créditos
+
+            // Recalcular alíquota, créditos e atualizar painel
             this.calcularAliquotaEfetiva();
             this.calcularCreditosTributarios();
         }
